@@ -1,0 +1,145 @@
+# Progress — AI-агент для скачивания / редактирования / отправки лендингов
+
+## Общая схема работы агента
+
+1. Задача в YouGile (канбан-доска)
+2. Получение лендинга:
+   - либо из трекера (если уже залит)
+   - либо скачивание из интернета (по URL)
+3. Очистка скачанного:
+   - удаление аналитики (GA, Yandex Metrika, Clarity, FB Pixel, Hotjar)
+   - удаление неиспользуемых файлов / папок / source-maps
+   - приведение к правильной структуре проекта
+4. Локальный запуск + проверка работоспособности
+5. Выполнение задания из YouGile:
+   - перевод текстов
+   - замена картинок
+   - инжект базовых скриптов
+6. Финальная проверка отображения (скриншоты + console errors)
+7. Упаковка в .zip + отправка обратно в трекер
+8. Проверка базовых функций на продакшене (как выглядит и работает)
+9. Изменение статуса и описания задачи в YouGile
+10. Добавление метрики Microsoft Clarity
+
+## Этапы разработки
+
+| # | Этап                       | Статус        |
+|---|----------------------------|---------------|
+| 1 | Скачивание сайта           | IN PROGRESS   |
+| 2 | Очистка                    | TODO          |
+| 3 | Локальная проверка         | TODO          |
+| 4 | Интеграция YouGile API     | TODO          |
+| 5 | Выполнение заданий         | TODO          |
+| 6 | Финальная проверка         | TODO          |
+| 7 | Упаковка + upload          | TODO          |
+| 8 | Production check + Clarity | TODO          |
+
+---
+
+## Этап 1 — прототип скачивания (готов).
+
+  Реализованы 3 фазы в scripts/download-site.ts:
+    - Phase 1: Playwright headless + перехват response + auto-scroll
+    - Phase 2: докачка недостающих ассетов через прямой fetch, sameDomainOnly,
+      фильтр по ASSET_EXTENSIONS, parallel concurrency=8
+    - Phase 3: rewrite абсолютных URL на относительные в HTML (только asset-теги)
+      и CSS (url, @import). С проверкой существования файла на диске.
+
+  Verify:
+    - Test1 (health-life24.online/lander/erectobust-free/): 44 файла, 3 битых
+      на оригинальном сервере (не наша проблема)
+    - Test2 (caitlinvneal.com wordpress+divi): 161 файл, 9 console errors
+      (все — внешние трекеры + MP4 video, на очистке уберём)
+
+  Известные ограничения:
+    - MP4 video: Playwright не даёт body для больших media (нужен fallback fetch)
+    - JSON-escaped URL в inline <script> не переписываются (риск сломать JS).
+      Divi-Admin шрифты страдают от этого — решится на этапе очистки.
+    - Внешние трекеры (splithero, postaffpro, optimonk, GA) скачаны, но их JS
+      падает без конфигов — удалить на этапе очистки.
+
+Этап 2 — очистка (готов).
+
+  scripts/clean-site.ts — удаляет:
+    - <script src="..."> с трекерных доменов (GA, GTM, FB Pixel, OptiMonk,
+      SplitHero, PostAffPro, Hotjar, Mixpanel, Intercom, и др.)
+    - inline <script> с упоминаниями функций трекинга (gtag, fbq, _gaq, ym,
+      PostAffTracker, ...)
+    - <noscript>, <link rel="dns-prefetch|preconnect">, <meta name="..."> на верификации
+    - папки _external/<tracker-host>/ целиком (subdomain-match, не includes)
+
+  Доп. фиксы в этапе 1 (download-site.ts):
+    - Phase 3 теперь переписывает абсолютные URL внутри inline <script>,
+      включая JSON-escaped формат (https:\/\/host\/...) — для Divi-инжектов CSS.
+      Только если файл реально на диске.
+    - Phase 1 использует реальный Chrome User-Agent по умолчанию (не HeadlessChrome),
+      чтобы избежать антибот-блокировок (SiteGround Captcha и т.п.).
+
+  Verify test2 (после clean): 4 console errors → 0 (JSON-escape fix решит CORS на Divi-fonts).
+  Test2 временно недоступен из-за SiteGround Captcha (бан IP), проверим позже.
+
+Инфраструктура — установка Playwright браузеров.
+
+  Проблема: при перезапуске IDE команда download падала с
+  "Executable doesn't exist at chromium_headless_shell-1217" даже после
+  успешной установки.
+
+  Причина: IDE-расширения иногда триггерят npm install, и playwright
+  обновляется до новой минорной версии (новый Chromium revision), а старый
+  кэш в ~/.cache/ms-playwright/ становится несовместимым.
+
+  Решение в package.json:
+    - "playwright": "1.59.1" (pin, без caret)
+    - "postinstall": "playwright install chromium" (автоустановка)
+  Это стандартная практика для Playwright-проектов.
+
+### Контекст
+- Сайты: смешанные (статика + WordPress)
+- Тип: одностраничные лендинги (краулер не нужен)
+- Текущий ручной процесс: Chrome DevTools → плагин "Save All Resources"
+
+### Стратегия
+Использовать Playwright (headless Chromium) для дословной эмуляции Save All Resources:
+- подписка на `page.on('response', ...)` — перехват всех сетевых ответов
+- ожидание `networkidle`
+- авто-скролл до конца страницы — триггер lazy-load
+- сохранение файлов в структуре папок согласно URL pathname
+- финальный HTML — из `page.content()` (после JS-рендера)
+
+### Решения по архитектуре
+- Прототип сначала вне Mastra (в `scripts/download-site.ts`) — быстрый цикл итераций
+- После успешных тестов — обернуть в Mastra-tool `downloadSite`
+- Запуск через `tsx` (TypeScript без сборки)
+
+### Шаги
+- [x] Согласовать стратегию с пользователем
+- [ ] Установить Playwright + Chromium
+- [ ] Написать прототип `scripts/download-site.ts`
+- [ ] Добавить npm-скрипт `download` в package.json
+- [ ] Протестировать на реальном сайте пользователя
+- [ ] Зафиксировать список крайних случаев / проблем
+- [ ] Обернуть в Mastra-tool
+
+### Открытые вопросы
+- Нужно ли сохранять ассеты со сторонних доменов (CDN)? — пока сохраняем все
+- Нужна ли поддержка авторизации (cookies / basic auth)? — отложено
+- Mobile / desktop viewport — пока desktop по умолчанию
+
+---
+
+## Технические заметки
+
+### Окружение
+- Хост: Windows, разработка в WSL
+- Node: >=22.13.0
+- Mastra: 1.32.1
+- Запуск Mastra Studio: `npm run dev` (long-running, отдельный терминал)
+
+### Используемые AI / сервисы
+- LLM: OpenRouter (через .env)
+- Текущие агенты: weatherAgent (из туториала), myAgent (тест)
+
+### Принципы
+- Минимальные апстрим-фиксы вместо downstream-обходов
+- Для Mastra ВСЕГДА сначала загружать skill `mastra` и проверять API в установленной версии
+- Не коммитить `.env` и секреты
