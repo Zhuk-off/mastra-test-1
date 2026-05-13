@@ -39,8 +39,9 @@ import {
   cp,
 } from 'node:fs/promises';
 import { extname, join, resolve, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-interface CleanStats {
+export interface CleanStats {
   htmlFilesProcessed: number;
   phpFilesProcessed: number;
   scriptsRemoved: number;
@@ -823,7 +824,7 @@ async function cleanSvgFile(filePath: string): Promise<number> {
 // Резервная копия
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function createBackup(siteDir: string): Promise<string> {
+export async function createBackup(siteDir: string): Promise<string> {
   const backupDir = siteDir.replace(/\/+$/, '') + '_backup';
   await cp(siteDir, backupDir, { recursive: true });
   return backupDir;
@@ -833,7 +834,7 @@ async function createBackup(siteDir: string): Promise<string> {
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function cleanSite(siteDir: string): Promise<CleanStats> {
+export async function cleanSite(siteDir: string): Promise<CleanStats> {
   const stats: CleanStats = {
     htmlFilesProcessed: 0,
     phpFilesProcessed: 0,
@@ -995,7 +996,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error('[clean-site] Fatal:', err);
-  process.exit(1);
-});
+const __filename = fileURLToPath(import.meta.url);
+if (resolve(process.argv[1] ?? '') === resolve(__filename)) {
+  main().catch((err) => {
+    console.error('[clean-site] Fatal:', err);
+    process.exit(1);
+  });
+}

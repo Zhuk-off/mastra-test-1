@@ -20,7 +20,7 @@
 import { chromium, type Response } from 'playwright';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, resolve, posix } from 'node:path';
-import { URL } from 'node:url';
+import { URL, fileURLToPath } from 'node:url';
 
 interface DownloadOptions {
   url: string;
@@ -32,7 +32,7 @@ interface DownloadOptions {
   timeout?: number;
 }
 
-interface DownloadStats {
+export interface DownloadStats {
   saved: number;
   skipped: number;
   failed: number;
@@ -748,6 +748,32 @@ async function phase3RewriteUrls(
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface DownloadResult {
+  outputDir: string;
+  phase1: DownloadStats;
+  phase2: { saved: number; failed: number };
+  phase3: { rewrittenFiles: number };
+}
+
+export async function downloadSite(url: string, outputDir?: string): Promise<DownloadResult> {
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error(`URL must start with http:// or https://: ${url}`);
+  }
+
+  const resolvedOutputDir = outputDir ?? `./downloads/${new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_')}`;
+
+  const result = await phase1Browser({ url, outputDir: resolvedOutputDir });
+  const phase2 = await phase2DownloadMissing(result, resolvedOutputDir);
+  const phase3 = await phase3RewriteUrls(result, resolvedOutputDir);
+
+  return {
+    outputDir: resolve(resolvedOutputDir),
+    phase1: result.stats,
+    phase2,
+    phase3,
+  };
+}
+
 function printUsageAndExit(): never {
   console.error('Usage: npm run download -- <url> [outputDir]');
   process.exit(1);
@@ -798,7 +824,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error('[download-site] Fatal:', err);
-  process.exit(1);
-});
+const __filename = fileURLToPath(import.meta.url);
+if (resolve(process.argv[1] ?? '') === resolve(__filename)) {
+  main().catch((err) => {
+    console.error('[download-site] Fatal:', err);
+    process.exit(1);
+  });
+}
