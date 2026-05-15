@@ -1,8 +1,24 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
+import { join, dirname, resolve } from 'node:path';
 import { downloadSite } from '../../../scripts/download-site';
 
-const DOWNLOADS_BASE = './downloads';
+/**
+ * Mastra dev server starts the process with cwd=src/mastra/public/,
+ * so relative paths resolve there instead of the project root.
+ * MASTRA_PACKAGES_FILE is injected by Mastra and points to
+ * <project-root>/.mastra/mastra-packages.json — go one level up from its
+ * dirname to reach the actual project root.
+ * Falls back to process.cwd() when running scripts manually (no Mastra env).
+ */
+function getProjectRoot(): string {
+  if (process.env.MASTRA_PACKAGES_FILE) {
+    return resolve(dirname(process.env.MASTRA_PACKAGES_FILE), '..');
+  }
+  return process.cwd();
+}
+
+const DOWNLOADS_BASE = join(getProjectRoot(), 'downloads');
 
 export const downloadSiteTool = createTool({
   id: 'download-site',
@@ -36,7 +52,9 @@ export const downloadSiteTool = createTool({
     totalSaved: z.number(),
   }),
   execute: async ({ url }) => {
-    const result = await downloadSite(url);
+    const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
+    const outputDir = join(DOWNLOADS_BASE, hostname);
+    const result = await downloadSite(url, outputDir);
 
     return {
       ...result,
