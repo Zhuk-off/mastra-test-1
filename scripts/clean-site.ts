@@ -196,6 +196,63 @@ const DANGEROUS_EVENT_ATTRS: readonly string[] = [
   'oncontextmenu', 'oninput', 'oninvalid', 'onsearch',
 ];
 
+/** Имена файлов (basename) указывающие на трекер — для относительных URL. */
+const TRACKER_FILENAME_PATTERNS: string[] = [
+  'fbevents',
+  'fbq',
+  'facebook-pixel',
+  'gtag',
+  'gtm',
+  'ga.js',
+  'analytics.js',
+  'google-analytics',
+  'googletagmanager',
+  'metrika',
+  'yandex_metrika',
+  'hotjar',
+  'mixpanel',
+  'amplitude',
+  'segment',
+  'intercom',
+  'postaffiliate',
+  'pap',
+  'optimonk',
+  'splithero',
+  'crazyegg',
+  'clarity',
+  'pixel',
+  'beacon',
+  'sendbeacon',
+  'tracker',
+  'tracking',
+  'retarget',
+  'conversion',
+  'remarketing',
+  'linkedin-insight',
+  'lintrk',
+  'twq',
+  'tiktok-pixel',
+  'snapchat-pixel',
+  'pinterest-tag',
+  'taboola',
+  'outbrain',
+  'cookiebot',
+  'cookieconsent',
+  'onetrust',
+  'hubspot',
+  'hs-scripts',
+  'livechat',
+  'zendesk',
+  'zdassets',
+  'driftt',
+  'tawk',
+  'crisp',
+  'sentry',
+  'heap',
+  'vk-pixel',
+  'vk-retargeting',
+];
+
 /** Ключевые слова в inline <script> — если есть, скрипт удаляется. */
 const TRACKER_INLINE_KEYWORDS: string[] = [
   // Google
@@ -335,6 +392,10 @@ function urlMatchesTracker(url: string): boolean {
       if (!t.includes('/') && hostMatches(host, t)) return true;
     }
   }
+
+  // 4) Относительные URL — проверка имени файла на трекерные паттерны.
+  const basename = lowerUrl.split('/').pop()?.split('?')[0] ?? '';
+  if (TRACKER_FILENAME_PATTERNS.some((p) => basename.includes(p))) return true;
 
   return false;
 }
@@ -520,16 +581,12 @@ function cleanHtml(content: string): { html: string; counts: HtmlCleanCounts } {
     },
   );
 
-  // 8. <base href="..."> с внешним доменом
+  // 8. <base href="..."> — удаляем все (после rewrite URL они только ломают локальные пути)
   content = content.replace(
-    /<base\b([^>]*?)\/?>/gi,
-    (whole, attrs: string) => {
-      const hrefMatch = /\bhref\s*=\s*(['"])([^'"]*)\1/i.exec(attrs);
-      if (hrefMatch && isExternalUrl(hrefMatch[2]!)) {
-        counts.baseHref++;
-        return '';
-      }
-      return whole;
+    /<base\b[^>]*\/?>/gi,
+    () => {
+      counts.baseHref++;
+      return '';
     },
   );
 
