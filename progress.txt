@@ -143,3 +143,27 @@
 - Минимальные апстрим-фиксы вместо downstream-обходов
 - Для Mastra ВСЕГДА сначала загружать skill `mastra` и проверять API в установленной версии
 - Не коммитить `.env` и секреты
+
+---
+
+## Шаг 0 — Конвенции, env, регистрация (DONE)
+
+**Дата:** 2026-05-18
+
+**Что сделано:**
+- `.env.example` обновлён: добавлены заглушки `YOUGILE_API_TOKEN`, `YOUGILE_BOARD_ID`, `KEITARO_API_URL`, `KEITARO_API_KEY`, `CLARITY_PROJECT_ID`
+- Созданы пустые папки: `src/mastra/tools/yougile/`, `src/mastra/tools/keitaro/`, `src/mastra/tools/modify/`
+- Создан единый HTTP-клиент-helper `src/mastra/lib/http.ts`:
+  - `createHttpClient(config)` — фабрика с поддержкой baseUrl, defaultHeaders, timeout, retry
+  - Методы: `get`, `post`, `put`, `patch`, `delete`
+  - Retry с exponential backoff для статусов 429, 5xx
+  - Автоматический выброс `HttpClientError` на 401 (без retry)
+  - `HttpTimeoutError` при превышении таймаута
+  - Опциональная валидация ответа через Zod schema
+  - Все методы возвращают типизированный `HttpResponse<T>`
+- `npm run build` — зелёный
+
+**Acceptance criteria:**
+- ✅ `npm run build` зелёный
+- ✅ `.env.example` обновлён
+- ✅ Helper-клиент создан (unit-тесты отложены — опционально по плану)
