@@ -79,7 +79,7 @@ function urlToFilePath(resourceUrl: string, mainHost: string): string | null {
   }
   const lastSegment = pathname.split('/').pop() ?? '';
   if (!lastSegment.includes('.')) {
-    pathname += '/index.html';
+    pathname += '.html';
   }
 
   const safeSegments = pathname
