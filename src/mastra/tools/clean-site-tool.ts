@@ -1,7 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { resolve, join } from 'node:path';
-import { cleanSite, createBackup } from '../../../scripts/clean-site';
+import { cleanSite, createBackup } from '../cleaners/index.js';
 
 export const cleanSiteTool = createTool({
   id: 'clean-site',

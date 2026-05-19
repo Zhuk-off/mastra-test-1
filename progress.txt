@@ -167,3 +167,20 @@
 - ✅ `npm run build` зелёный
 - ✅ `.env.example` обновлён
 - ✅ Helper-клиент создан (unit-тесты отложены — опционально по плану)
+
+---
+
+## Рефакторинг clean-site → cleaners modules (2026-05-19)
+
+**Что сделано:**
+- Монолит `scripts/clean-site.ts` (1155 строк) разбит на модули `src/mastra/cleaners/`.
+- Структура: `registry/` (8 констант), `utils/` (4 функции), `passes/html/` (11 pure-функций), `passes/svg/`, `passes/js/`, `passes/css/`, `passes/fs/`.
+- `pipeline.ts` — массив `HTML_PASSES` в точном порядке исходника + `createBackup`/`cleanSite`.
+- `scripts/clean-site.ts` — тонкая CLI-обёртка (~78 строк).
+- `src/mastra/tools/clean-site-tool.ts` — изменена только одна строка импорта.
+- Публичный API идентичен: `cleanSite(siteDir)`, `createBackup(siteDir)`, `CleanStats` (25 полей).
+
+**Acceptance:**
+- ✅ `npm run build` зелёный
+- ✅ Регрессионный `diff -r /tmp/before-test /tmp/after-test` пуст
+- ✅ Регрессионный `diff` логов очистки идентичен (разница только в путях)
