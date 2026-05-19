@@ -49,6 +49,16 @@ export const downloadSiteTool = createTool({
     phase3: z.object({
       rewrittenFiles: z.number(),
     }),
+    phase4: z.object({
+      urlsFixed: z.number(),
+      missingReport: z.array(z.object({
+        file: z.string(),
+        url: z.string(),
+        type: z.enum(['external-no-local', 'local-missing']),
+        suggestion: z.string().optional(),
+      })),
+      reportPath: z.string(),
+    }),
     totalSaved: z.number(),
   }),
   execute: async ({ url }) => {
@@ -57,7 +67,11 @@ export const downloadSiteTool = createTool({
     const result = await downloadSite(url, outputDir);
 
     return {
-      ...result,
+      outputDir: result.outputDir,
+      phase1: result.phase1,
+      phase2: result.phase2,
+      phase3: result.phase3,
+      phase4: result.phase4,
       totalSaved: result.phase1.saved + result.phase2.saved,
     };
   },

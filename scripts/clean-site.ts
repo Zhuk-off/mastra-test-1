@@ -38,7 +38,7 @@ import {
   stat,
   cp,
 } from 'node:fs/promises';
-import { extname, join, resolve, relative } from 'node:path';
+import { basename, extname, join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export interface CleanStats {
@@ -64,6 +64,7 @@ export interface CleanStats {
   externalDirsRemoved: number;
   sourceMapsDeleted: number;
   sourceMapRefsStripped: number;
+  offerLinksReplaced: number;
   bytesBefore: number;
   bytesAfter: number;
 }
@@ -442,9 +443,80 @@ interface HtmlCleanCounts {
   baseHref: number;
   objectEmbeds: number;
   eventAttrs: number;
+  offerLinksReplaced: number;
 }
 
-function cleanHtml(content: string): { html: string; counts: HtmlCleanCounts } {
+/** Паттерны в URL, указывающие на оффер (а не на информационную страницу). */
+const OFFER_URL_PATTERNS: RegExp[] = [
+  /[?&]_lp=/i,
+  /[?&]_token=/i,
+  /[?&]click_id=/i,
+  /[?&]subid=/i,
+  /[?&]sub_id=/i,
+  /[?&]affiliate=/i,
+  /[?&]aff_id=/i,
+  /[?&]offer=/i,
+  /[?&]order=/i,
+  /[?&]checkout=/i,
+  /[?&]buy=/i,
+  /[?&]redirect=/i,
+  /[?&]goto=/i,
+  /[?&]campaign=/i,
+  /[?&]adset=/i,
+  /[?&]pixel=/i,
+  /[?&]fbclid=/i,
+  /[?&]utm_/i,
+  /\/click\//i,
+  /\/redirect\//i,
+  /\/go\//i,
+  /\/offer\//i,
+  /\/order\//i,
+  /\/checkout\//i,
+  /\/buy\//i,
+];
+
+/** Пути, которые НЕ являются офферными (информационные страницы). */
+const NON_OFFER_PATH_PATTERNS: RegExp[] = [
+  /^\/(privacy|policy|privacy-policy|terms|terms-of-service|tos|contact|about|faq|help|support|blog|news)(\/|$)/i,
+  /^\/wp-(content|admin|includes|json)\//i,
+];
+
+/** Извлекает основной домен из имени директории сайта (downloads/<hostname>/). */
+function extractMainHostFromDir(siteDir: string): string {
+  return basename(resolve(siteDir));
+}
+
+function looksLikeOfferUrl(url: string, mainHost: string): boolean {
+  if (!/^https?:\/\//i.test(url) && !url.startsWith('//')) return false;
+
+  // Декодируем HTML-entities (&amp; → &) которые встречаются в исходном HTML
+  const decoded = url.replace(/&amp;/gi, '&');
+
+  const host = extractHostname(decoded);
+  if (!host) return false;
+
+  // Если домен отличается от основного — это оффер (внешний)
+  if (!hostMatches(host, mainHost)) {
+    // Но не трогаем trusted-хосты (cdn, google, соцсети и т.д.)
+    if (Array.from(TRUSTED_HOSTS).some((t) => hostMatches(host, t))) return false;
+    return true;
+  }
+
+  // Тот же домен — проверяем путь на информационные страницы
+  let pathname: string;
+  try {
+    pathname = new URL(decoded).pathname;
+  } catch {
+    return false;
+  }
+
+  if (NON_OFFER_PATH_PATTERNS.some((p) => p.test(pathname))) return false;
+
+  // Проверяем на офферные паттерны в query string и path
+  return OFFER_URL_PATTERNS.some((p) => p.test(decoded));
+}
+
+function cleanHtml(content: string, mainHost: string): { html: string; counts: HtmlCleanCounts } {
   const counts: HtmlCleanCounts = {
     scripts: 0,
     inlineScripts: 0,
@@ -457,6 +529,7 @@ function cleanHtml(content: string): { html: string; counts: HtmlCleanCounts } {
     baseHref: 0,
     objectEmbeds: 0,
     eventAttrs: 0,
+    offerLinksReplaced: 0,
   };
 
   // 1. <script src="..."> — внешние трекеры
@@ -616,7 +689,22 @@ function cleanHtml(content: string): { html: string; counts: HtmlCleanCounts } {
     },
   );
 
-  // 11. Event-атрибуты с внешними вызовами или трекерными функциями
+  // 11. Замена офферных ссылок на макрос {offer}
+  content = content.replace(
+    /<a\b([^>]*?)>/gi,
+    (whole, attrs: string) => {
+      const hrefMatch = /\bhref\s*=\s*(['"])([^'"]+)\1/i.exec(attrs);
+      if (!hrefMatch) return whole;
+      const href = hrefMatch[2]!;
+      if (looksLikeOfferUrl(href, mainHost)) {
+        counts.offerLinksReplaced++;
+        return whole.replace(hrefMatch[0], `href=${hrefMatch[1]!}{offer}${hrefMatch[1]!}`);
+      }
+      return whole;
+    },
+  );
+
+  // 12. Event-атрибуты с внешними вызовами или трекерными функциями
   const attrPattern = new RegExp(
     `\\b(${DANGEROUS_EVENT_ATTRS.join('|')})\\s*=\\s*('[^']*'|"[^"]*")`,
     'gi',
@@ -633,7 +721,7 @@ function cleanHtml(content: string): { html: string; counts: HtmlCleanCounts } {
     return whole;
   });
 
-  // 12. Подчищаем пустые строки, оставшиеся после удалений (косметика)
+  // 13. Подчищаем пустые строки, оставшиеся после удалений (косметика)
   content = content.replace(/\n[ \t]*\n[ \t]*\n+/g, '\n\n');
 
   return { html: content, counts };
@@ -915,6 +1003,7 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
     externalDirsRemoved: 0,
     sourceMapsDeleted: 0,
     sourceMapRefsStripped: 0,
+    offerLinksReplaced: 0,
     bytesBefore: 0,
     bytesAfter: 0,
   };
@@ -929,7 +1018,8 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
       const before = await readFile(file, 'utf8');
       stats.bytesBefore += before.length;
 
-      const { html: after, counts } = cleanHtml(before);
+      const mainHost = extractMainHostFromDir(siteDir);
+      const { html: after, counts } = cleanHtml(before, mainHost);
       if (after !== before) {
         await writeFile(file, after, 'utf8');
       }
@@ -951,6 +1041,7 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
       stats.baseHrefRemoved += counts.baseHref;
       stats.objectEmbedsRemoved += counts.objectEmbeds;
       stats.eventAttrsRemoved += counts.eventAttrs;
+      stats.offerLinksReplaced += counts.offerLinksReplaced;
       continue;
     }
 
@@ -1043,6 +1134,7 @@ async function main(): Promise<void> {
   console.log(`[clean-site] _external/ удалено:      ${stats.externalDirsRemoved}`);
   console.log(`[clean-site] .map файлов удалено:     ${stats.sourceMapsDeleted}`);
   console.log(`[clean-site] sourceMappingURL убрано: ${stats.sourceMapRefsStripped}`);
+  console.log(`[clean-site] оффер-ссылок заменено:  ${stats.offerLinksReplaced}`);
   const reduction = stats.bytesBefore - stats.bytesAfter;
   const pct = stats.bytesBefore > 0 ? ((reduction / stats.bytesBefore) * 100).toFixed(1) : '0.0';
   console.log(

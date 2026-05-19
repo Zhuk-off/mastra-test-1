@@ -18,8 +18,8 @@
  */
 
 import { chromium, type Response } from 'playwright';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, extname, join, resolve, posix } from 'node:path';
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { dirname, extname, join, relative, resolve, posix } from 'node:path';
 import { URL, fileURLToPath } from 'node:url';
 
 interface DownloadOptions {
@@ -580,6 +580,13 @@ function rewriteHtmlContent(
   mainHost: string,
   ctx: RewriteCtx,
 ): string {
+  // Если в HTML есть <base href="...">, используем его для резолвинга
+  // относительных URL, а сам тег потом удалим.
+  const baseMatch = /<base\b[^>]*\bhref\s*=\s*(['"])([^'"]+)\1[^>]*\/?>/i.exec(content);
+  const effectiveBaseUrl = baseMatch
+    ? resolveUrl(baseMatch[2]!, baseUrl) ?? baseUrl
+    : baseUrl;
+
   // Переписываем URL только внутри asset-тегов (link/script/img/source/video/etc).
   // <a href>, <form action>, <meta content> — НЕ трогаем.
   content = content.replace(HTML_ASSET_TAG_RE, (whole, _tag: string, attrs: string) => {
@@ -589,7 +596,7 @@ function rewriteHtmlContent(
     newAttrs = newAttrs.replace(
       HTML_URL_ATTR_RE,
       (m: string, name: string, q: string, val: string) => {
-        const nv = rewriteOneUrl(val, fromFile, baseUrl, mainHost, ctx);
+        const nv = rewriteOneUrl(val, fromFile, effectiveBaseUrl, mainHost, ctx);
         return nv ? `${name}=${q}${nv}${q}` : m;
       },
     );
@@ -603,7 +610,7 @@ function rewriteHtmlContent(
         const newParts = parts.map((p) => {
           const [u, ...sizeRest] = p.split(/\s+/);
           if (!u) return p;
-          const nv = rewriteOneUrl(u, fromFile, baseUrl, mainHost, ctx);
+          const nv = rewriteOneUrl(u, fromFile, effectiveBaseUrl, mainHost, ctx);
           if (nv) {
             changed = true;
             return [nv, ...sizeRest].join(' ');
@@ -619,7 +626,7 @@ function rewriteHtmlContent(
 
   // Inline <style>...</style>
   content = content.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (m, css: string) => {
-    const newCss = rewriteCssContent(css, fromFile, baseUrl, mainHost, ctx);
+    const newCss = rewriteCssContent(css, fromFile, effectiveBaseUrl, mainHost, ctx);
     return m.replace(css, newCss);
   });
 
@@ -627,7 +634,7 @@ function rewriteHtmlContent(
   content = content.replace(
     /(\sstyle\s*=\s*)(['"])([^'"]+)\2/gi,
     (m: string, prefix: string, q: string, val: string) => {
-      const nv = rewriteCssContent(val, fromFile, baseUrl, mainHost, ctx);
+      const nv = rewriteCssContent(val, fromFile, effectiveBaseUrl, mainHost, ctx);
       return nv === val ? m : `${prefix}${q}${nv}${q}`;
     },
   );
@@ -647,6 +654,9 @@ function rewriteHtmlContent(
       return newBody === body ? whole : whole.replace(body, newBody);
     },
   );
+
+  // Удаляем <base> — он больше не нужен (все URL уже резолвнуты с его учётом)
+  content = content.replace(/<base\b[^>]*\/?>\s*/gi, '');
 
   return content;
 }
@@ -745,6 +755,335 @@ async function phase3RewriteUrls(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Phase 4 — Проверка целостности URL
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface MissingResource {
+  file: string;
+  url: string;
+  type: 'external-no-local' | 'local-missing';
+  suggestion?: string;
+}
+
+interface Phase4Result {
+  urlsFixed: number;
+  missingReport: MissingResource[];
+  reportPath: string;
+}
+
+/**
+ * Строит индекс: basename → массив относительных путей ко всем файлам
+ * с таким именем в outputDir.
+ */
+async function buildBasenameIndex(outputDir: string): Promise<Map<string, string[]>> {
+  const index = new Map<string, string[]>();
+  const absoluteOutputDir = resolve(outputDir);
+
+  async function walk(dir: string): Promise<void> {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) {
+        await walk(full);
+      } else if (e.isFile()) {
+        const rel = relative(absoluteOutputDir, full);
+        const bn = e.name.toLowerCase();
+        const existing = index.get(bn) ?? [];
+        existing.push(rel);
+        index.set(bn, existing);
+      }
+    }
+  }
+
+  await walk(absoluteOutputDir);
+  return index;
+}
+
+/**
+ * Ищет файл с таким же basename в индексе. Возвращает лучший кандидат:
+ * предпочитает файлы на том же хосте (не в _external/), потом ближайшие по пути.
+ */
+function findBestCandidate(
+  basename: string,
+  fromFile: string,
+  index: Map<string, string[]>,
+): string | undefined {
+  const candidates = index.get(basename.toLowerCase());
+  if (!candidates || candidates.length === 0) return undefined;
+
+  // Исключаем сам fromFile из кандидатов
+  const others = candidates.filter((c) => c !== fromFile);
+  if (others.length === 0) return undefined;
+
+  // Приоритет: локальные файлы (не _external/)
+  const local = others.filter((c) => !c.startsWith('_external/'));
+  const best = local.length > 0 ? local : others;
+
+  // Выбираем с кратчайшим относительным путём
+  let shortest = best[0]!;
+  let shortestLen = posix.relative(posix.dirname(fromFile), best[0]!).length;
+  for (const c of best.slice(1)) {
+    const len = posix.relative(posix.dirname(fromFile), c).length;
+    if (len < shortestLen) {
+      shortest = c;
+      shortestLen = len;
+    }
+  }
+  return shortest;
+}
+
+async function phase4IntegrityCheck(
+  result: Phase1Result,
+  outputDir: string,
+): Promise<Phase4Result> {
+  const absoluteOutputDir = resolve(outputDir);
+  const index = await buildBasenameIndex(absoluteOutputDir);
+  let urlsFixed = 0;
+  const missingReport: MissingResource[] = [];
+
+  for (const [filePath, originalUrl] of result.fileToUrl) {
+    const cat = categorizeByExt(filePath);
+    if (cat !== 'html' && cat !== 'css') continue;
+
+    const absPath = join(absoluteOutputDir, filePath);
+    let content: string;
+    try {
+      content = await readFile(absPath, 'utf8');
+    } catch {
+      continue;
+    }
+
+    const before = content;
+
+    if (cat === 'html') {
+      content = await fixHtmlUrls(content, filePath, originalUrl, result.mainHost, index, absoluteOutputDir, missingReport, () => urlsFixed++);
+    } else {
+      content = await fixCssUrls(content, filePath, originalUrl, result.mainHost, index, absoluteOutputDir, missingReport, () => urlsFixed++);
+    }
+
+    if (content !== before) {
+      await writeFile(absPath, content, 'utf8');
+    }
+  }
+
+  // Пишем отчёт о недостающих ресурсах
+  let reportPath = '';
+  if (missingReport.length > 0) {
+    reportPath = join(absoluteOutputDir, 'missing-resources.log');
+    const lines = [
+      'Файл | Тип | Исходный URL | Рекомендация',
+      '-'.repeat(120),
+      ...missingReport.map((m) =>
+        `${m.file} | ${m.type} | ${m.url} | ${m.suggestion ?? '— требуется ручная загрузка'}`,
+      ),
+    ];
+    await writeFile(reportPath, lines.join('\n') + '\n', 'utf8');
+  }
+
+  return { urlsFixed, missingReport, reportPath };
+}
+
+async function fixHtmlUrls(
+  content: string,
+  fromFile: string,
+  baseUrl: string,
+  mainHost: string,
+  index: Map<string, string[]>,
+  outputDir: string,
+  report: MissingResource[],
+  onFixed: () => void,
+): Promise<string> {
+  // Обрабатываем URL в asset-тегах
+  content = content.replace(HTML_ASSET_TAG_RE, (whole, _tag: string, attrs: string) => {
+    let newAttrs = attrs;
+
+    newAttrs = newAttrs.replace(
+      HTML_URL_ATTR_RE,
+      (m: string, name: string, q: string, val: string) => {
+        const fixed = fixOneUrl(val, fromFile, baseUrl, mainHost, index, outputDir, report);
+        if (fixed !== null && fixed !== val) {
+          onFixed();
+          return `${name}=${q}${fixed}${q}`;
+        }
+        return m;
+      },
+    );
+
+    newAttrs = newAttrs.replace(
+      HTML_SRCSET_ATTR_RE,
+      (m: string, name: string, q: string, val: string) => {
+        const parts = val.split(',').map((p) => p.trim()).filter(Boolean);
+        let changed = false;
+        const newParts = parts.map((p) => {
+          const [u, ...sizeRest] = p.split(/\s+/);
+          if (!u) return p;
+          const fixed = fixOneUrl(u, fromFile, baseUrl, mainHost, index, outputDir, report);
+          if (fixed !== null && fixed !== u) {
+            changed = true;
+            onFixed();
+            return [fixed, ...sizeRest].join(' ');
+          }
+          return p;
+        });
+        return changed ? `${name}=${q}${newParts.join(', ')}${q}` : m;
+      },
+    );
+
+    return newAttrs === attrs ? whole : whole.replace(attrs, newAttrs);
+  });
+
+  // Inline style="..."
+  content = content.replace(
+    /(\sstyle\s*=\s*)(['"])([^'"]+)\2/gi,
+    (m: string, prefix: string, q: string, val: string) => {
+      const nv = fixCssUrlsInline(val, fromFile, baseUrl, mainHost, index, outputDir, report, onFixed);
+      return nv === val ? m : `${prefix}${q}${nv}${q}`;
+    },
+  );
+
+  return content;
+}
+
+async function fixCssUrls(
+  content: string,
+  fromFile: string,
+  baseUrl: string,
+  mainHost: string,
+  index: Map<string, string[]>,
+  outputDir: string,
+  report: MissingResource[],
+  onFixed: () => void,
+): Promise<string> {
+  return fixCssUrlsInline(content, fromFile, baseUrl, mainHost, index, outputDir, report, onFixed);
+}
+
+function fixCssUrlsInline(
+  content: string,
+  fromFile: string,
+  baseUrl: string,
+  mainHost: string,
+  index: Map<string, string[]>,
+  outputDir: string,
+  report: MissingResource[],
+  onFixed: () => void,
+): string {
+  content = content.replace(CSS_URL_RE, (match, quote: string, value: string) => {
+    const fixed = fixOneUrl(value, fromFile, baseUrl, mainHost, index, outputDir, report);
+    if (fixed !== null && fixed !== value) {
+      onFixed();
+      return `url(${quote}${fixed}${quote})`;
+    }
+    return match;
+  });
+  content = content.replace(CSS_IMPORT_RE, (match, value: string) => {
+    const fixed = fixOneUrl(value, fromFile, baseUrl, mainHost, index, outputDir, report);
+    if (fixed !== null && fixed !== value) {
+      onFixed();
+      return match.replace(value, fixed);
+    }
+    return match;
+  });
+  return content;
+}
+
+/**
+ * Проверяет и исправляет один URL:
+ * - Если абсолютный внешний → ищет локальную копию, если нет → в отчёт
+ * - Если относительный → проверяет существование, если нет → ищет по basename
+ * Возвращает исправленный URL или null если не требует изменений.
+ */
+function fixOneUrl(
+  rawUrl: string,
+  fromFile: string,
+  baseUrl: string,
+  mainHost: string,
+  index: Map<string, string[]>,
+  outputDir: string,
+  report: MissingResource[],
+): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+  if (
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('mailto:') ||
+    trimmed.startsWith('tel:') ||
+    trimmed.startsWith('javascript:') ||
+    trimmed.startsWith('#')
+  ) {
+    return null;
+  }
+
+  const isAbsolute = /^https?:\/\//i.test(trimmed) || trimmed.startsWith('//');
+
+  if (isAbsolute) {
+    // Внешний URL — ищем локальную копию по basename
+    const absUrl = resolveUrl(trimmed, baseUrl);
+    if (!absUrl) return null;
+
+    let basename: string;
+    try {
+      const pathname = new URL(absUrl).pathname;
+      basename = posix.basename(pathname).toLowerCase();
+    } catch {
+      return null;
+    }
+
+    if (!basename || !basename.includes('.')) return null;
+
+    const candidate = findBestCandidate(basename, fromFile, index);
+    if (candidate) {
+      return relPath(fromFile, candidate);
+    }
+
+    // Не нашли локальную копию — в отчёт
+    report.push({
+      file: fromFile,
+      url: trimmed,
+      type: 'external-no-local',
+      suggestion: 'файл не найден в локальных ресурсах — требуется ручная загрузка',
+    });
+    return null;
+  }
+
+  // Относительный URL — проверяем существование файла
+  const targetPath = posix.join(posix.dirname(fromFile), trimmed.split('?')[0]!);
+  const absTarget = join(outputDir, targetPath);
+
+  if (fileExistsSync(absTarget)) return null; // файл есть, всё ок
+
+  // Файла нет — ищем по basename
+  const basename = posix.basename(trimmed.split('?')[0]!).toLowerCase();
+  if (!basename || !basename.includes('.')) {
+    // Не можем определить файл — оставляем как есть
+    return null;
+  }
+
+  const candidate = findBestCandidate(basename, fromFile, index);
+  if (candidate) {
+    return relPath(fromFile, candidate);
+  }
+
+  // Не нашли нигде — в отчёт
+  report.push({
+    file: fromFile,
+    url: trimmed,
+    type: 'local-missing',
+    suggestion: 'файл не найден в дереве проекта',
+  });
+  return null;
+}
+
+function fileExistsSync(p: string): boolean {
+  try {
+    const { statSync } = require('node:fs') as typeof import('node:fs');
+    statSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -753,6 +1092,7 @@ export interface DownloadResult {
   phase1: DownloadStats;
   phase2: { saved: number; failed: number };
   phase3: { rewrittenFiles: number };
+  phase4: Phase4Result;
 }
 
 export async function downloadSite(url: string, outputDir?: string): Promise<DownloadResult> {
@@ -765,12 +1105,14 @@ export async function downloadSite(url: string, outputDir?: string): Promise<Dow
   const result = await phase1Browser({ url, outputDir: resolvedOutputDir });
   const phase2 = await phase2DownloadMissing(result, resolvedOutputDir);
   const phase3 = await phase3RewriteUrls(result, resolvedOutputDir);
+  const phase4 = await phase4IntegrityCheck(result, resolvedOutputDir);
 
   return {
     outputDir: resolve(resolvedOutputDir),
     phase1: result.stats,
     phase2,
     phase3,
+    phase4,
   };
 }
 
@@ -809,6 +1151,9 @@ async function main(): Promise<void> {
   // Phase 3
   const phase3 = await phase3RewriteUrls(result, outputDir);
 
+  // Phase 4
+  const phase4 = await phase4IntegrityCheck(result, outputDir);
+
   const seconds = ((Date.now() - start) / 1000).toFixed(1);
   console.log('');
   console.log(`[download-site] Готово за ${seconds}s`);
@@ -818,6 +1163,11 @@ async function main(): Promise<void> {
   console.log(`[download-site] Phase2 saved:   ${phase2.saved}`);
   console.log(`[download-site] Phase2 failed:  ${phase2.failed}`);
   console.log(`[download-site] Phase3 rewritten files: ${phase3.rewrittenFiles}`);
+  console.log(`[download-site] Phase4 urls fixed:      ${phase4.urlsFixed}`);
+  console.log(`[download-site] Phase4 missing resources: ${phase4.missingReport.length}`);
+  if (phase4.reportPath) {
+    console.log(`[download-site] Phase4 report: ${phase4.reportPath}`);
+  }
   console.log('[download-site] По типам (phase 1):');
   for (const [type, count] of Object.entries(result.stats.byType).sort((a, b) => b[1] - a[1])) {
     console.log(`  - ${type.padEnd(8)} ${count}`);
