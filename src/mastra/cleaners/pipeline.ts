@@ -8,6 +8,7 @@ import { cleanSvgFile } from './passes/svg/clean-svg.js';
 import { cleanJsFile } from './passes/js/clean-js.js';
 import { cleanCssFile } from './passes/css/clean-css.js';
 import { removeTrackerExternals } from './passes/fs/remove-tracker-externals.js';
+import { buildCdnReplacements } from './utils/cdn-detector.js';
 import { removeSourceMaps } from './passes/fs/remove-source-maps.js';
 
 // HTML passes
@@ -22,6 +23,8 @@ import { removeTrackerIframes } from './passes/html/remove-tracker-iframes.js';
 import { removeImgPixels } from './passes/html/remove-img-pixels.js';
 import { removeBase } from './passes/html/remove-base.js';
 import { removeObjectEmbed } from './passes/html/remove-object-embed.js';
+import { removeFrames } from './passes/html/remove-frames.js';
+import { replaceLocalLibsWithCdn } from './passes/html/replace-local-libs-with-cdn.js';
 import { replaceOfferLinks } from './passes/html/replace-offer-links.js';
 import { stripEventAttrs } from './passes/html/strip-event-attrs.js';
 
@@ -40,6 +43,8 @@ const HTML_PASSES: HtmlPass[] = [
   removeImgPixels,           // 7
   removeBase,                // 8
   removeObjectEmbed,         // 9+10
+  removeFrames,              // frame + frameset + noframes
+  replaceLocalLibsWithCdn,   // локальные библиотеки → CDN
   replaceOfferLinks,         // 11
   stripEventAttrs,           // 12
 ];
@@ -84,6 +89,8 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
     metaRefreshRemoved: 0,
     baseHrefRemoved: 0,
     objectEmbedsRemoved: 0,
+    framesRemoved: 0,
+    localLibsReplaced: 0,
     eventAttrsRemoved: 0,
     svgFilesProcessed: 0,
     svgItemsRemoved: 0,
@@ -110,12 +117,14 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
       const before = await readFile(file, 'utf8');
       stats.bytesBefore += before.length;
 
+      const cdnReplacements = await buildCdnReplacements(siteDir, file, before);
       const ctx: PassContext = {
         siteDir,
         mainHost,
         filePath: file,
         relPath,
         log: changelog,
+        cdnReplacements,
       };
 
       const { html: after, counts } = applyHtmlPasses(before, ctx);
@@ -139,6 +148,8 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
       stats.metaRefreshRemoved += counts.metaRefreshRemoved ?? 0;
       stats.baseHrefRemoved += counts.baseHrefRemoved ?? 0;
       stats.objectEmbedsRemoved += counts.objectEmbedsRemoved ?? 0;
+      stats.framesRemoved += counts.framesRemoved ?? 0;
+      stats.localLibsReplaced += counts.localLibsReplaced ?? 0;
       stats.eventAttrsRemoved += counts.eventAttrsRemoved ?? 0;
       stats.offerLinksReplaced += counts.offerLinksReplaced ?? 0;
       continue;

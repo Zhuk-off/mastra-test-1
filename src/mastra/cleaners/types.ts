@@ -11,6 +11,8 @@ export interface CleanStats {
   metaRefreshRemoved: number;
   baseHrefRemoved: number;
   objectEmbedsRemoved: number;
+  framesRemoved: number;
+  localLibsReplaced: number;
   eventAttrsRemoved: number;
   svgFilesProcessed: number;
   svgItemsRemoved: number;
@@ -24,6 +26,11 @@ export interface CleanStats {
   offerLinksReplaced: number;
   bytesBefore: number;
   bytesAfter: number;
+}
+
+export interface CdnReplacement {
+  cdnUrl: string;
+  integrity: string;
 }
 
 export interface ChangelogEntry {
@@ -40,6 +47,7 @@ export interface PassContext {
   filePath: string;
   relPath: string;
   log: ChangelogEntry[];
+  cdnReplacements?: Map<string, CdnReplacement>;
 }
 
 // Поля CleanStats, относящиеся к HTML-проходам.
@@ -54,6 +62,8 @@ export type HtmlStatsKey =
   | 'metaRefreshRemoved'
   | 'baseHrefRemoved'
   | 'objectEmbedsRemoved'
+  | 'framesRemoved'
+  | 'localLibsReplaced'
   | 'eventAttrsRemoved'
   | 'offerLinksReplaced';
 

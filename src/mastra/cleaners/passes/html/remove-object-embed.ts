@@ -5,16 +5,12 @@ export const removeObjectEmbed: HtmlPass = (html, _ctx) => {
   const counts: Partial<Record<'objectEmbedsRemoved', number>> = {};
   let objectEmbedsRemoved = 0;
 
-  // <object data="..."> с внешними ресурсами
+  // <object ...> — удаляем ВСЕ безусловно
   html = html.replace(
     /<object\b([^>]*?)>([\s\S]*?)<\/object>/gi,
-    (whole, attrs: string) => {
-      const dataMatch = /\bdata\s*=\s*(['"])([^'"]+)\1/i.exec(attrs);
-      if (dataMatch && isExternalUrl(dataMatch[2]!)) {
-        objectEmbedsRemoved++;
-        return '';
-      }
-      return whole;
+    () => {
+      objectEmbedsRemoved++;
+      return '';
     },
   );
 

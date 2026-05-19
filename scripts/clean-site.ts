@@ -47,6 +47,8 @@ async function main(): Promise<void> {
   console.log(`[clean-site] meta refresh удалено:    ${stats.metaRefreshRemoved}`);
   console.log(`[clean-site] <base href> удалено:     ${stats.baseHrefRemoved}`);
   console.log(`[clean-site] <object>/<embed> удал.:  ${stats.objectEmbedsRemoved}`);
+  console.log(`[clean-site] <frame> удалено:       ${stats.framesRemoved}`);
+  console.log(`[clean-site] libs → CDN заменено:   ${stats.localLibsReplaced}`);
   console.log(`[clean-site] event-атрибутов удал.:   ${stats.eventAttrsRemoved}`);
   console.log(`[clean-site] JSON-LD удалено:         ${stats.jsonLdRemoved}`);
   console.log(`[clean-site] img-пиксели удалено:     ${stats.imgPixelsRemoved}`);
