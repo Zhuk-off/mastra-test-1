@@ -105,6 +105,12 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
     offerLinksReplaced: 0,
     bytesBefore: 0,
     bytesAfter: 0,
+    deadJsFilesRemoved: 0,
+    partialJsCleaned: 0,
+    inlineExfilRemoved: 0,
+    unversionedLibsCdn: 0,
+    metricFilesRemoved: 0,
+    detectorWarnings: 0,
   };
 
   // Нормализуем структуру лендинга: находим главный файл, перемещаем в корень,

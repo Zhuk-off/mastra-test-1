@@ -49,6 +49,20 @@ export interface CleanStats {
   bytesBefore: number;
   bytesAfter: number;
   normalize?: NormalizeStats;
+
+  // --- Advanced JS cleaning ---
+  /** JS-файлы удалены как мёртвый код (0% coverage, нет event-handlers) */
+  deadJsFilesRemoved: number;
+  /** JS-файлы частично очищены (удалены exfil/dead функции, файл оставлен) */
+  partialJsCleaned: number;
+  /** Inline <script> блоки в HTML, из которых удалены exfil-вызовы */
+  inlineExfilRemoved: number;
+  /** Библиотеки без версии (jquery.js, vendor.js) заменены на CDN */
+  unversionedLibsCdn: number;
+  /** Метрик-файлы удалены (по AST-сигнатуре, не только по имени) */
+  metricFilesRemoved: number;
+  /** Предупреждения от детекторов (obfuscation, keylogger и т.д.) */
+  detectorWarnings: number;
 }
 
 export interface CdnReplacement {
