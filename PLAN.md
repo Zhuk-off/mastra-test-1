@@ -124,6 +124,7 @@ src/mastra/
 | 0  | Конвенции, env, регистрация               | infra          | ✅     | —           |
 | 1  | Скачивание сайта по URL                   | tool           | ✅     | —           |
 | 2  | Базовая очистка                           | tool           | 🟡    | 1           |
+| 2.5| Advanced JS cleaning (8 этапов)           | cleaner        | ⬜     | 2           |
 | 3  | Локальная верификация                     | tool           | 🟡    | 2           |
 | 4  | YouGile: чтение задач                     | tool           | ⬜     | 0           |
 | 5  | YouGile: вложения (zip)                   | tool           | ⬜     | 4           |
@@ -186,6 +187,32 @@ src/mastra/
 - Особое внимание: сохранение работоспособности форм/CTA после удаления трекеров (часто `onclick`/`onsubmit` зависит от `gtag`/`fbq` — нужно либо стабить, либо удалять обработчик целиком).
 
 **Acceptance criteria:** на 5 разных лендингах после clean — 0 console errors и все CTA-кнопки кликаются.
+
+---
+
+## Шаг 2.5 — Advanced JS Cleaning (⬜ TODO)
+
+**Цель:** расширить очистку JS файлов от трекеров, мёртвого кода и вредоносного кода с помощью AST-анализа и Playwright coverage.
+
+**Полная спека:** `docs/js-cleaning-spec.md` — там подробное ТЗ по 8 этапам с кодом, тестами и acceptance criteria для middle-разработчика.
+
+**Этапы (реализовывать в этом порядке):**
+1. Foundation: `acorn` + `magic-string`, типы `DetectionResult`, обновление `CleanStats`
+2. Metric-file remover: удаление файлов-метрик по AST-сигнатуре (расширение `TRACKER_FILENAME_PATTERNS`)
+3. Unversioned libs → CDN: jQuery/Bootstrap без версии в имени → CDN по AST-детекту
+4. Inline exfil в HTML: хирургическое AST-вырезание `fetch`/`sendBeacon`/трекер-глобалов из inline `<script>`
+5. Coverage-based dead file detection: Playwright `startJSCoverage()` → удаление 0%-файлов
+6. Partial useful extractor: удаление exfil-функций из смешанных файлов (call graph)
+7. Advanced detectors: обфускация, кейлоггеры, PHP-бэкдоры (только WARN кроме обфускации)
+8. Visual diff + полная интеграция, CLI флаг `--advanced`
+
+**CLI после реализации:**
+```bash
+npm run clean -- <siteDir> --advanced            # AST-анализ
+npm run clean -- <siteDir> --advanced --coverage # + Playwright coverage
+```
+
+**Acceptance criteria:** на 5 реальных лендингах — 0 console errors, CTA работают, размер JS уменьшается ≥ 30%.
 
 ---
 
