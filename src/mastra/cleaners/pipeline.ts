@@ -10,6 +10,7 @@ import { cleanCssFile } from './passes/css/clean-css.js';
 import { removeTrackerExternals } from './passes/fs/remove-tracker-externals.js';
 import { buildCdnReplacements } from './utils/cdn-detector.js';
 import { removeSourceMaps } from './passes/fs/remove-source-maps.js';
+import { normalizeLandingStructure } from './utils/normalize-landing-structure.js';
 
 // HTML passes
 import { removeTrackerScripts } from './passes/html/remove-tracker-scripts.js';
@@ -105,6 +106,10 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
     bytesBefore: 0,
     bytesAfter: 0,
   };
+
+  // Нормализуем структуру лендинга: находим главный файл, перемещаем в корень,
+  // раскладываем ресурсы по папкам и переписываем пути.
+  stats.normalize = await normalizeLandingStructure(siteDir);
 
   const changelog: ChangelogEntry[] = [];
   const mainHost = extractMainHostFromDir(siteDir);

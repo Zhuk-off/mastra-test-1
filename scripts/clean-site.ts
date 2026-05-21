@@ -34,6 +34,23 @@ async function main(): Promise<void> {
   const seconds = ((Date.now() - start) / 1000).toFixed(1);
 
   console.log('');
+
+  if (stats.normalize && stats.normalize.mainFileFound) {
+    console.log('[clean-site] === Нормализация структуры ===');
+    console.log(`[clean-site] Главный файл: ${stats.normalize.mainFileFound}`);
+    if (stats.normalize.mainFileMoved && stats.normalize.mainFileRenamed) {
+      console.log(`[clean-site] Переименован и перемещён → index.${stats.normalize.mainFileExtension}`);
+    } else if (stats.normalize.mainFileMoved) {
+      console.log(`[clean-site] Перемещён в корень → index.${stats.normalize.mainFileExtension}`);
+    } else if (stats.normalize.mainFileRenamed) {
+      console.log(`[clean-site] Переименован → index.${stats.normalize.mainFileExtension}`);
+    }
+    console.log(`[clean-site] Файлов перемещено: ${stats.normalize.filesMoved}`);
+    console.log(`[clean-site] Путей переписано:  ${stats.normalize.pathsRewritten}`);
+    console.log(`[clean-site] CSS-путей переписано: ${stats.normalize.cssPathsRewritten}`);
+    console.log('');
+  }
+
   console.log(`[clean-site] Готово за ${seconds}s`);
   console.log(`[clean-site] HTML обработано:         ${stats.htmlFilesProcessed}`);
   console.log(`[clean-site] PHP обработано:          ${stats.phpFilesProcessed}`);
@@ -61,9 +78,10 @@ async function main(): Promise<void> {
   console.log(`[clean-site] sourceMappingURL убрано: ${stats.sourceMapRefsStripped}`);
   console.log(`[clean-site] оффер-ссылок заменено:  ${stats.offerLinksReplaced}`);
   const reduction = stats.bytesBefore - stats.bytesAfter;
-  const pct = stats.bytesBefore > 0 ? ((reduction / stats.bytesBefore) * 100).toFixed(1) : '0.0';
+  const pct = stats.bytesBefore > 0 ? Math.abs((reduction / stats.bytesBefore) * 100).toFixed(1) : '0.0';
+  const sign = reduction >= 0 ? '-' : '+';
   console.log(
-    `[clean-site] HTML/PHP размер: ${stats.bytesBefore} → ${stats.bytesAfter} байт (-${reduction}, ${pct}%)`,
+    `[clean-site] HTML/PHP размер: ${stats.bytesBefore} → ${stats.bytesAfter} байт (${sign}${Math.abs(reduction)}, ${sign}${pct}%)`,
   );
   if (stats.jsFilesScanned > 0 || stats.cssFilesScanned > 0) {
     console.log(`[clean-site] Лог изменений: ${join(siteDir, 'clean-site-changes.log')}`);

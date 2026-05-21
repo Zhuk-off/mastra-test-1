@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "dev": "mastra dev",
     "build": "mastra build",
     "start": "mastra start",
@@ -35,6 +36,7 @@
     "mastra": "^1.8.1",
     "playwright": "1.59.1",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "4.1.7"
   }
 }

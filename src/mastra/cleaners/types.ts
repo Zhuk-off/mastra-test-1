@@ -1,3 +1,23 @@
+/**
+ * Stats returned by normalizeLandingStructure.
+ * - pathsRewritten    — number of *resources* for which at least one replacement was made in HTML.
+ * - cssPathsRewritten — same, but for CSS files.
+ */
+export interface NormalizeStats {
+  mainFileFound: string;
+  /** True if the main file's basename changed (e.g. landing.html → index.html). */
+  mainFileRenamed: boolean;
+  /** True if the main file's path on disk changed — moved to root and/or renamed. */
+  mainFileMoved: boolean;
+  /** Extension under which the main file was saved ('html' or 'php'). */
+  mainFileExtension: 'html' | 'php';
+  filesMoved: number;
+  /** Number of resources for which at least one replacement was made in HTML. */
+  pathsRewritten: number;
+  /** Number of resources for which at least one replacement was made in CSS. */
+  cssPathsRewritten: number;
+}
+
 export interface CleanStats {
   htmlFilesProcessed: number;
   phpFilesProcessed: number;
@@ -26,6 +46,7 @@ export interface CleanStats {
   offerLinksReplaced: number;
   bytesBefore: number;
   bytesAfter: number;
+  normalize?: NormalizeStats;
 }
 
 export interface CdnReplacement {
