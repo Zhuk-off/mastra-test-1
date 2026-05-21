@@ -18,8 +18,10 @@ export interface NormalizeStats {
   mainFileRenamed: boolean;
   /** True if the main file's path on disk changed — moved to root and/or renamed. */
   mainFileMoved: boolean;
-  /** Extension under which the main file was saved ('html' or 'php'). */
-  mainFileExtension: 'html' | 'php';
+  /** Always 'html' — the output file is always saved as index.html. */
+  mainFileExtension: 'html';
+  /** True if PHP code blocks were found and removed from the main file. */
+  phpStripped: boolean;
   filesMoved: number;
   /** Number of resources for which at least one replacement was made in HTML. */
   pathsRewritten: number;
@@ -299,6 +301,12 @@ function decodePathSafe(url: string): string {
   }
 }
 
+// PHP-stripping: remove all PHP code blocks from the content
+function stripPhpCode(content: string): string {
+  // Handles: <?php ... ?>, <?= ... ?>, <? ... ?> (including multi-line blocks)
+  return content.replace(/<\?(?:php|=)?[\s\S]*?\?>/gi, '');
+}
+
 // Bug #14 fix: recursively remove empty directories left behind after moving files
 async function removeEmptyDirs(root: string, dir: string): Promise<void> {
   let entries: string[];
@@ -323,6 +331,7 @@ export async function normalizeLandingStructure(
     mainFileRenamed: false,
     mainFileMoved: false,
     mainFileExtension: 'html',
+    phpStripped: false,
     filesMoved: 0,
     pathsRewritten: 0,
     cssPathsRewritten: 0,
@@ -336,9 +345,9 @@ export async function normalizeLandingStructure(
   // Collect resources BEFORE renaming — paths in HTML are relative to the original location
   const resources = await collectResources(main.path);
 
-  // Bug #6 fix: preserve .php extension for PHP main files
-  stats.mainFileExtension = main.isPhp ? 'php' : 'html';
-  const targetName = main.isPhp ? 'index.php' : 'index.html';
+  // Always output index.html regardless of original extension (PHP code will be stripped below)
+  stats.mainFileExtension = 'html';
+  const targetName = 'index.html';
   const targetIndexPath = join(siteDir, targetName);
   if (main.path !== targetIndexPath) {
     await rename(main.path, targetIndexPath);
@@ -370,6 +379,15 @@ export async function normalizeLandingStructure(
   }
 
   let html = await readFile(targetIndexPath, 'utf8');
+
+  // Strip PHP code blocks if the original file was a PHP file
+  if (main.isPhp) {
+    const stripped = stripPhpCode(html);
+    if (stripped !== html) {
+      stats.phpStripped = true;
+      html = stripped;
+    }
+  }
 
   // Bug #11 fix: rewrite all srcset attributes in one pass — handles duplicate URLs and multiple entries
   const srcsetChangedUrls = new Set<string>();

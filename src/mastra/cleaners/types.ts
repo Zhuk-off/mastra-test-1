@@ -9,8 +9,10 @@ export interface NormalizeStats {
   mainFileRenamed: boolean;
   /** True if the main file's path on disk changed — moved to root and/or renamed. */
   mainFileMoved: boolean;
-  /** Extension under which the main file was saved ('html' or 'php'). */
-  mainFileExtension: 'html' | 'php';
+  /** Always 'html' — the output file is always saved as index.html. */
+  mainFileExtension: 'html';
+  /** True if PHP code blocks were found and removed from the main file. */
+  phpStripped: boolean;
   filesMoved: number;
   /** Number of resources for which at least one replacement was made in HTML. */
   pathsRewritten: number;

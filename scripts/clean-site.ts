@@ -45,6 +45,9 @@ async function main(): Promise<void> {
     } else if (stats.normalize.mainFileRenamed) {
       console.log(`[clean-site] Переименован → index.${stats.normalize.mainFileExtension}`);
     }
+    if (stats.normalize.phpStripped) {
+      console.log('[clean-site] PHP-код удалён из главного файла');
+    }
     console.log(`[clean-site] Файлов перемещено: ${stats.normalize.filesMoved}`);
     console.log(`[clean-site] Путей переписано:  ${stats.normalize.pathsRewritten}`);
     console.log(`[clean-site] CSS-путей переписано: ${stats.normalize.cssPathsRewritten}`);

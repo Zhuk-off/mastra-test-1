@@ -359,11 +359,11 @@ describe('edge cases', () => {
 });
 
 // ---------------------------------------------------------------------------
-// BUG #6: PHP main file preserved as .php
+// BUG #6: PHP main file → always index.html, PHP code stripped
 // ---------------------------------------------------------------------------
 
-describe('BUG #6 — PHP main file kept as .php', () => {
-  it('renames landing.php to index.php (not index.html) and rewrites links', async () => {
+describe('BUG #6 — PHP main file converted to index.html with PHP stripped', () => {
+  it('renames landing.php to index.html and strips PHP code', async () => {
     await setup(tmp, {
       'landing.php': `<?php /* landing */ ?><!DOCTYPE html>
 <html><head>
@@ -374,33 +374,122 @@ describe('BUG #6 — PHP main file kept as .php', () => {
 
     const stats = await normalizeLandingStructure(tmp);
 
-    expect(stats.mainFileExtension).toBe('php');
-    expect(stats.mainFileRenamed).toBe(true);
-    expect(await exists(join(tmp, 'index.php'))).toBe(true);
-    expect(await exists(join(tmp, 'index.html'))).toBe(false);
+    expect(stats.mainFileExtension).toBe('html');
+    expect(stats.mainFileRenamed).toBe(true);  // basename changed: landing.php → index.html
+    expect(stats.phpStripped).toBe(true);
+    expect(await exists(join(tmp, 'index.html'))).toBe(true);
+    expect(await exists(join(tmp, 'index.php'))).toBe(false);
 
-    const html = await read(join(tmp, 'index.php'));
+    const html = await read(join(tmp, 'index.html'));
+    expect(html).not.toContain('<?php');
     expect(html).toContain('href="css/style.css"');
     expect(await exists(join(tmp, 'css/style.css'))).toBe(true);
   });
 
-  it('does not rename if index.php is already at root', async () => {
+  it('renames index.php at root to index.html', async () => {
     await setup(tmp, {
-      'index.php': `<?php /* landing */ ?><!DOCTYPE html>
+      'index.php': `<?php /* header */ ?><!DOCTYPE html>
 <html><body><h1>Main</h1><form></form></body></html>`,
     });
 
     const stats = await normalizeLandingStructure(tmp);
 
-    expect(stats.mainFileExtension).toBe('php');
-    expect(stats.mainFileRenamed).toBe(false);
-    expect(await exists(join(tmp, 'index.php'))).toBe(true);
+    expect(stats.mainFileExtension).toBe('html');
+    expect(stats.mainFileMoved).toBe(true);    // path changed: index.php → index.html
+    expect(stats.mainFileRenamed).toBe(true);  // basename changed
+    expect(stats.phpStripped).toBe(true);
+    expect(await exists(join(tmp, 'index.html'))).toBe(true);
+    expect(await exists(join(tmp, 'index.php'))).toBe(false);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(html).not.toContain('<?php');
+    expect(html).toContain('<h1>Main</h1>');
   });
 
-  it('returns mainFileExtension "html" for regular HTML files', async () => {
-    await setup(tmp, { 'index.html': '<html><body><h1>Hi</h1></body></html>' });
+  it('always returns mainFileExtension "html" even for PHP files', async () => {
+    await setup(tmp, { 'index.php': '<?php echo "x"; ?><!DOCTYPE html><html><body></body></html>' });
     const stats = await normalizeLandingStructure(tmp);
     expect(stats.mainFileExtension).toBe('html');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHP stripping — edge cases
+// ---------------------------------------------------------------------------
+
+describe('PHP stripping — various PHP block patterns', () => {
+  it('removes single-line <?php ... ?> block', async () => {
+    await setup(tmp, {
+      'index.php': '<?php echo "hi"; ?><html><body><h1>OK</h1></body></html>',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(html).not.toContain('<?php');
+    expect(html).toContain('<h1>OK</h1>');
+  });
+
+  it('removes short-echo <?= ... ?> block', async () => {
+    await setup(tmp, {
+      'index.php': '<html><body><h1><?= $title ?></h1><form></form></body></html>',
+    });
+
+    const stats = await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(html).not.toContain('<?=');
+    expect(stats.phpStripped).toBe(true);
+  });
+
+  it('removes multi-line PHP block', async () => {
+    await setup(tmp, {
+      'index.php': `<?php
+$x = 1;
+$y = 2;
+?>
+<html><body><h1>Content</h1></body></html>`,
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(html).not.toContain('<?php');
+    expect(html).not.toContain('$x');
+    expect(html).toContain('<h1>Content</h1>');
+  });
+
+  it('removes multiple PHP blocks throughout the file', async () => {
+    await setup(tmp, {
+      'index.php': `<?php define('X', 1); ?><html><head><?php include 'head.php'; ?></head>
+<body><h1><?= $title ?></h1><form></form></body></html>`,
+    });
+
+    const stats = await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(html).not.toContain('<?');
+    expect(stats.phpStripped).toBe(true);
+  });
+
+  it('phpStripped is false for a PHP file without any PHP blocks', async () => {
+    await setup(tmp, {
+      'index.php': '<html><body><h1>Pure HTML served as PHP</h1></body></html>',
+    });
+
+    const stats = await normalizeLandingStructure(tmp);
+
+    expect(stats.phpStripped).toBe(false);
+    expect(await exists(join(tmp, 'index.html'))).toBe(true);
+  });
+
+  it('phpStripped is false for regular HTML files', async () => {
+    await setup(tmp, {
+      'index.html': '<html><body><h1>Hello</h1></body></html>',
+    });
+
+    const stats = await normalizeLandingStructure(tmp);
+    expect(stats.phpStripped).toBe(false);
   });
 });
 
