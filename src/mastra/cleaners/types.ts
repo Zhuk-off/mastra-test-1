@@ -63,6 +63,10 @@ export interface CleanStats {
   metricFilesRemoved: number;
   /** Предупреждения от детекторов (obfuscation, keylogger и т.д.) */
   detectorWarnings: number;
+  /** JS-файлы удалены как обфусцированные (_0x vars, eval packer, fromCharCode) */
+  obfuscatedFilesRemoved: number;
+  /** true если найдены PHP-бэкдоры (require manual inspection) */
+  phpBackdoorWarning: boolean;
 }
 
 export interface CdnReplacement {

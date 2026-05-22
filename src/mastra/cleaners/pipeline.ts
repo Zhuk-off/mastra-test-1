@@ -15,6 +15,7 @@ import { detectUnversionedLib, type DetectedLib } from './passes/js-advanced/det
 import { buildUnversionedCdnReplacements } from './utils/unversioned-cdn-detector.js';
 import { collectCoverage } from './passes/js-advanced/coverage/collect-coverage.js';
 import { analyzeDeadFiles } from './passes/js-advanced/coverage/analyze-coverage.js';
+import { detectPhpBackdoors } from './passes/php/detect-php-backdoors.js';
 
 // HTML passes
 import { removeTrackerScripts } from './passes/html/remove-tracker-scripts.js';
@@ -117,6 +118,8 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     unversionedLibsCdn: 0,
     metricFilesRemoved: 0,
     detectorWarnings: 0,
+    obfuscatedFilesRemoved: 0,
+    phpBackdoorWarning: false,
   };
 
   // Нормализуем структуру лендинга: находим главный файл, перемещаем в корень,
@@ -126,6 +129,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
   const changelog: ChangelogEntry[] = [];
   const mainHost = extractMainHostFromDir(siteDir);
   const metricFilesToDelete = new Set<string>();
+  const obfuscatedFilesToDelete = new Set<string>();
 
   // Pre-scan: определяем библиотеки без версии в имени
   const unversionedLibMap = new Map<string, DetectedLib>();
@@ -179,6 +183,13 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
 
       if (ext === '.php') {
         stats.phpFilesProcessed++;
+        // Stage 7: PHP backdoor scanning (WARN only)
+        const phpWarnings = detectPhpBackdoors(before, relPath);
+        if (phpWarnings.length > 0) {
+          changelog.push(...phpWarnings);
+          stats.phpBackdoorWarning = true;
+          stats.detectorWarnings += phpWarnings.length;
+        }
       } else {
         stats.htmlFilesProcessed++;
       }
@@ -210,12 +221,17 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     if (ext === '.js' || ext === '.mjs') {
       const result: CleanJsResult = await cleanJsFile(file, relPath, changelog, mainHost);
       stats.jsFilesScanned++;
+      if (result.isObfuscated) {
+        obfuscatedFilesToDelete.add(file);
+        continue;
+      }
       if (result.isMetricFile) {
         metricFilesToDelete.add(file);
         continue;
       }
       stats.jsItemsRemoved += result.removed;
       if (result.partialCleaned) stats.partialJsCleaned++;
+      stats.detectorWarnings += result.detectorWarnings;
       continue;
     }
 
@@ -240,6 +256,31 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
       const before = await readFile(htmlFile, 'utf8');
       let after = before;
       for (const absPath of metricFilesToDelete) {
+        const rel = relative(siteDir, absPath);
+        const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
+        after = after.replace(re, '');
+      }
+      if (after !== before) {
+        await writeFile(htmlFile, after, 'utf8');
+      }
+    }
+  }
+
+  // Удаляем обфусцированные JS-файлы и чистим <script src> в HTML
+  if (obfuscatedFilesToDelete.size > 0) {
+    for (const absPath of obfuscatedFilesToDelete) {
+      await unlink(absPath);
+    }
+    stats.obfuscatedFilesRemoved += obfuscatedFilesToDelete.size;
+
+    // Удаляем <script src="..."> из HTML, ссылающиеся на удалённые файлы
+    for await (const htmlFile of walkFiles(siteDir)) {
+      const ext = extname(htmlFile).toLowerCase();
+      if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
+      const before = await readFile(htmlFile, 'utf8');
+      let after = before;
+      for (const absPath of obfuscatedFilesToDelete) {
         const rel = relative(siteDir, absPath);
         const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
