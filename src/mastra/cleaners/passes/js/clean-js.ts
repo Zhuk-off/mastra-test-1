@@ -3,6 +3,8 @@ import type { ChangelogEntry } from '../../types.js';
 import { removeServiceWorker } from './remove-service-worker.js';
 import { removeEvalObfuscation } from './remove-eval-obfuscation.js';
 import { warnSuspiciousPatterns } from './warn-suspicious-patterns.js';
+import { parseJs } from '../js-advanced/ast/parse.js';
+import { detectMetricFile } from '../js-advanced/detectors/detect-metric-file.js';
 
 export async function cleanJsFile(
   filePath: string,
@@ -22,6 +24,21 @@ export async function cleanJsFile(
   removed += evalObf.removed;
 
   warnSuspiciousPatterns(content, relPath, log);
+
+  const ast = parseJs(content, relPath);
+  if (ast) {
+    const check = detectMetricFile(ast, content);
+    if (check.isMetricFile) {
+      log.push({
+        file: relPath,
+        type: 'METRIC_FILE',
+        description: check.reason,
+        lineNumber: 1,
+      });
+      // Маркер для pipeline: файл — метрик-файл, нужно удалить
+      return 9999;
+    }
+  }
 
   if (content !== original) await writeFile(filePath, content, 'utf8');
   return removed;

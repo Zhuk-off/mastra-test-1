@@ -1,4 +1,4 @@
-import { readFile, writeFile, cp } from 'node:fs/promises';
+import { readFile, writeFile, cp, unlink } from 'node:fs/promises';
 import { extname, relative } from 'node:path';
 import type { CleanStats, HtmlPass, PassContext, HtmlStatsDelta, ChangelogEntry } from './types.js';
 import { extractMainHostFromDir } from './utils/offer-detector.js';
@@ -119,6 +119,7 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
 
   const changelog: ChangelogEntry[] = [];
   const mainHost = extractMainHostFromDir(siteDir);
+  const metricFilesToDelete = new Set<string>();
 
   for await (const file of walkFiles(siteDir)) {
     const ext = extname(file).toLowerCase();
@@ -176,6 +177,10 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
     if (ext === '.js' || ext === '.mjs') {
       const removed = await cleanJsFile(file, relPath, changelog);
       stats.jsFilesScanned++;
+      if (removed === 9999) {
+        metricFilesToDelete.add(file);
+        continue;
+      }
       stats.jsItemsRemoved += removed;
       continue;
     }
@@ -184,6 +189,31 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
       const removed = await cleanCssFile(file, relPath, changelog);
       stats.cssFilesScanned++;
       stats.cssItemsRemoved += removed;
+    }
+  }
+
+  // Удаляем метрик-файлы и чистим <script src> в HTML
+  if (metricFilesToDelete.size > 0) {
+    for (const absPath of metricFilesToDelete) {
+      await unlink(absPath);
+    }
+    stats.metricFilesRemoved += metricFilesToDelete.size;
+
+    // Удаляем <script src="..."> из HTML, ссылающиеся на удалённые файлы
+    for await (const htmlFile of walkFiles(siteDir)) {
+      const ext = extname(htmlFile).toLowerCase();
+      if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
+      const before = await readFile(htmlFile, 'utf8');
+      let after = before;
+      for (const absPath of metricFilesToDelete) {
+        const rel = relative(siteDir, absPath);
+        const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
+        after = after.replace(re, '');
+      }
+      if (after !== before) {
+        await writeFile(htmlFile, after, 'utf8');
+      }
     }
   }
 
