@@ -1,5 +1,5 @@
 import { readFile, writeFile, cp, unlink } from 'node:fs/promises';
-import { extname, relative, basename, dirname } from 'node:path';
+import { extname, relative, basename, dirname, resolve } from 'node:path';
 import type { CleanStats, HtmlPass, PassContext, HtmlStatsDelta, ChangelogEntry } from './types.js';
 import { extractMainHostFromDir } from './utils/offer-detector.js';
 import { walkFiles } from './utils/walk.js';
@@ -11,7 +11,7 @@ import { removeTrackerExternals } from './passes/fs/remove-tracker-externals.js'
 import { buildCdnReplacements } from './utils/cdn-detector.js';
 import { removeSourceMaps } from './passes/fs/remove-source-maps.js';
 import { normalizeLandingStructure } from './utils/normalize-landing-structure.js';
-import { detectUnversionedLib } from './passes/js-advanced/detectors/detect-unversioned-lib.js';
+import { detectUnversionedLib, type DetectedLib } from './passes/js-advanced/detectors/detect-unversioned-lib.js';
 import { buildUnversionedCdnReplacements } from './utils/unversioned-cdn-detector.js';
 
 // HTML passes
@@ -124,7 +124,7 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
   const metricFilesToDelete = new Set<string>();
 
   // Pre-scan: определяем библиотеки без версии в имени
-  const unversionedLibMap = new Map<string, { lib: { cdnUrl: (version: string) => string }; version: string }>();
+  const unversionedLibMap = new Map<string, DetectedLib>();
   for await (const file of walkFiles(siteDir)) {
     const ext = extname(file).toLowerCase();
     if (ext !== '.js' && ext !== '.mjs') continue;
