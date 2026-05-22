@@ -38,11 +38,10 @@ import { stripEventAttrs } from './passes/html/strip-event-attrs.js';
 // Порядок ОБЯЗАН совпадать с порядком блоков 1..12 из оригинального cleanHtml
 // (scripts/clean-site.ts до рефакторинга). Изменение порядка = поведенческий
 // регресс. См. REFACTOR-CLEAN-SITE.md, раздел 7 (регрессионный diff).
-const HTML_PASSES: HtmlPass[] = [
+const BASE_HTML_PASSES: HtmlPass[] = [
   removeTrackerScripts,      // 1: <script src>
   removeTrackerJsonLd,       // 2a: JSON-LD ветка
   removeInlineTrackers,      // 2b: остальные inline <script>
-  removeInlineExfilPass,     // 2c: хирургическое удаление exfil из inline <script>
   removeNoscriptTrackers,    // 3: <noscript> ДО iframe — иначе GTM noscript-iframe осиротеет
   removeTrackerLinks,        // 4
   removeTrackerMetas,        // 5a
@@ -57,11 +56,34 @@ const HTML_PASSES: HtmlPass[] = [
   stripEventAttrs,           // 12
 ];
 
-function applyHtmlPasses(html: string, ctx: PassContext): { html: string; counts: HtmlStatsDelta } {
+function getHtmlPasses(runAdvanced: boolean): HtmlPass[] {
+  if (!runAdvanced) return BASE_HTML_PASSES;
+  // Advanced mode: добавляем хирургическое удаление exfil после removeInlineTrackers (позиция 3)
+  return [
+    removeTrackerScripts,
+    removeTrackerJsonLd,
+    removeInlineTrackers,
+    removeInlineExfilPass,   // 2c: AST-хирургия inline exfil (только --advanced)
+    removeNoscriptTrackers,
+    removeTrackerLinks,
+    removeTrackerMetas,
+    removeMetaRefresh,
+    removeTrackerIframes,
+    removeImgPixels,
+    removeBase,
+    removeObjectEmbed,
+    removeFrames,
+    replaceLocalLibsWithCdn,
+    replaceOfferLinks,
+    stripEventAttrs,
+  ];
+}
+
+function applyHtmlPasses(html: string, ctx: PassContext, runAdvanced: boolean): { html: string; counts: HtmlStatsDelta } {
   let currentHtml = html;
   const totalCounts: HtmlStatsDelta = {};
 
-  for (const pass of HTML_PASSES) {
+  for (const pass of getHtmlPasses(runAdvanced)) {
     const result = pass(currentHtml, ctx);
     currentHtml = result.html;
     for (const [key, value] of Object.entries(result.counts)) {
@@ -131,16 +153,20 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
   const metricFilesToDelete = new Set<string>();
   const obfuscatedFilesToDelete = new Set<string>();
 
-  // Pre-scan: определяем библиотеки без версии в имени
+  const runAdvanced = options?.runAdvanced ?? false;
+
+  // Pre-scan: определяем библиотеки без версии в имени (только --advanced)
   const unversionedLibMap = new Map<string, DetectedLib>();
-  for await (const file of walkFiles(siteDir)) {
-    const ext = extname(file).toLowerCase();
-    if (ext !== '.js' && ext !== '.mjs') continue;
-    const base = basename(file);
-    if (/[\d]+\.[\d]+\.[\d]+/.test(base)) continue; // версия в имени — обрабатывает cdn-detector
-    const detected = await detectUnversionedLib(file);
-    if (detected) {
-      unversionedLibMap.set(relative(siteDir, file), detected);
+  if (runAdvanced) {
+    for await (const file of walkFiles(siteDir)) {
+      const ext = extname(file).toLowerCase();
+      if (ext !== '.js' && ext !== '.mjs') continue;
+      const base = basename(file);
+      if (/[\d]+\.[\d]+\.[\d]+/.test(base)) continue; // версия в имени — обрабатывает cdn-detector
+      const detected = await detectUnversionedLib(file);
+      if (detected) {
+        unversionedLibMap.set(relative(siteDir, file), detected);
+      }
     }
   }
 
@@ -166,7 +192,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
         unversionedLibReplacements,
       };
 
-      const { html: after, counts } = applyHtmlPasses(before, ctx);
+      const { html: after, counts } = applyHtmlPasses(before, ctx, runAdvanced);
       if (after !== before) {
         await writeFile(file, after, 'utf8');
       }
@@ -183,12 +209,14 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
 
       if (ext === '.php') {
         stats.phpFilesProcessed++;
-        // Stage 7: PHP backdoor scanning (WARN only)
-        const phpWarnings = detectPhpBackdoors(before, relPath);
-        if (phpWarnings.length > 0) {
-          changelog.push(...phpWarnings);
-          stats.phpBackdoorWarning = true;
-          stats.detectorWarnings += phpWarnings.length;
+        if (runAdvanced) {
+          // Stage 7: PHP backdoor scanning (WARN only, requires --advanced)
+          const phpWarnings = detectPhpBackdoors(before, relPath);
+          if (phpWarnings.length > 0) {
+            changelog.push(...phpWarnings);
+            stats.phpBackdoorWarning = true;
+            stats.detectorWarnings += phpWarnings.length;
+          }
         }
       } else {
         stats.htmlFilesProcessed++;
@@ -219,7 +247,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
 
     if (ext === '.js' || ext === '.mjs') {
-      const result: CleanJsResult = await cleanJsFile(file, relPath, changelog, mainHost);
+      const result: CleanJsResult = await cleanJsFile(file, relPath, changelog, mainHost, runAdvanced);
       stats.jsFilesScanned++;
       if (result.isObfuscated) {
         obfuscatedFilesToDelete.add(file);

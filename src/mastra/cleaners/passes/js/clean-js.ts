@@ -25,6 +25,7 @@ export async function cleanJsFile(
   relPath: string,
   log: ChangelogEntry[],
   mainHost = '',
+  runAdvanced = false,
 ): Promise<CleanJsResult> {
   const original = await readFile(filePath, 'utf8');
   let content = original;
@@ -41,85 +42,87 @@ export async function cleanJsFile(
 
   warnSuspiciousPatterns(content, relPath, log);
 
-  // Stage 7: detect obfuscation — delete entire file if detected
-  if (detectObfuscation(content)) {
-    log.push({
-      file: relPath,
-      type: 'OBFUSCATED_JS',
-      description: 'Файл удалён: обнаружена обфускация (_0x переменные / eval packer / fromCharCode)',
-      lineNumber: 1,
-    });
-    return { removed: 0, partialCleaned: false, isMetricFile: false, isObfuscated: true, detectorWarnings: 0 };
-  }
-
-  const ast = parseJs(content, relPath);
-  if (ast) {
-    const check = detectMetricFile(ast, content);
-    if (check.isMetricFile) {
+  if (runAdvanced) {
+    // Stage 7: detect obfuscation — delete entire file if detected (only --advanced)
+    if (detectObfuscation(content)) {
       log.push({
         file: relPath,
-        type: 'METRIC_FILE',
-        description: check.reason,
+        type: 'OBFUSCATED_JS',
+        description: 'Файл удалён: обнаружена обфускация (_0x переменные / eval packer / fromCharCode)',
         lineNumber: 1,
       });
-      return { removed: 0, partialCleaned: false, isMetricFile: true, isObfuscated: false, detectorWarnings: 0 };
+      return { removed: 0, partialCleaned: false, isMetricFile: false, isObfuscated: true, detectorWarnings: 0 };
     }
 
-    // Вырезаем функции, которые только делают exfil-вызовы (Stage 6)
-    const ctx = { source: content, relPath, mainHost };
-    const extracted = extractUsefulFunctions(content, ast, ctx, log);
-    if (extracted.removed > 0) {
-      content = extracted.code;
-      removed += extracted.removed;
-    }
-
-    // Stage 7: detect keylogger — WARN only
-    const keyloggerResults = detectKeylogger(ast, content);
-    for (const r of keyloggerResults) {
-      log.push({
-        file: relPath,
-        type: 'KEYLOGGER_WARN',
-        description: r.description,
-        codeSnippet: r.snippet,
-        lineNumber: r.line,
-      });
-      detectorWarnings++;
-    }
-
-    // Stage 7: detect redirect — WARN only
-    const redirectResults = detectRedirect(ast, { source: content, relPath, mainHost });
-    for (const r of redirectResults) {
-      log.push({
-        file: relPath,
-        type: 'REDIRECT_WARN',
-        description: r.description,
-        codeSnippet: r.snippet,
-        lineNumber: r.line,
-      });
-      detectorWarnings++;
-    }
-
-    // Stage 7: detect document.write(<script src="...">) — remove
-    const docWriteResults = detectDocWriteScript(ast, { source: content, relPath, mainHost });
-    const toRemove = docWriteResults.filter(r => r.shouldRemove);
-    if (toRemove.length > 0) {
-      const ms = new MagicString(content);
-      // Sort descending to avoid position shifts
-      const sorted = [...toRemove].sort((a, b) => b.start - a.start);
-      for (const r of sorted) {
-        let end = r.end;
-        while (end < content.length && /[;\s]/.test(content[end]!)) end++;
-        ms.remove(r.start, end);
+    const ast = parseJs(content, relPath);
+    if (ast) {
+      const check = detectMetricFile(ast, content);
+      if (check.isMetricFile) {
         log.push({
           file: relPath,
-          type: r.threatType.toUpperCase(),
+          type: 'METRIC_FILE',
+          description: check.reason,
+          lineNumber: 1,
+        });
+        return { removed: 0, partialCleaned: false, isMetricFile: true, isObfuscated: false, detectorWarnings: 0 };
+      }
+
+      // Вырезаем функции, которые только делают exfil-вызовы (Stage 6)
+      const ctx = { source: content, relPath, mainHost };
+      const extracted = extractUsefulFunctions(content, ast, ctx, log);
+      if (extracted.removed > 0) {
+        content = extracted.code;
+        removed += extracted.removed;
+      }
+
+      // Stage 7: detect keylogger — WARN only
+      const keyloggerResults = detectKeylogger(ast, content);
+      for (const r of keyloggerResults) {
+        log.push({
+          file: relPath,
+          type: 'KEYLOGGER_WARN',
           description: r.description,
           codeSnippet: r.snippet,
           lineNumber: r.line,
         });
-        removed++;
+        detectorWarnings++;
       }
-      content = ms.toString();
+
+      // Stage 7: detect redirect — WARN only
+      const redirectResults = detectRedirect(ast, { source: content, relPath, mainHost });
+      for (const r of redirectResults) {
+        log.push({
+          file: relPath,
+          type: 'REDIRECT_WARN',
+          description: r.description,
+          codeSnippet: r.snippet,
+          lineNumber: r.line,
+        });
+        detectorWarnings++;
+      }
+
+      // Stage 7: detect document.write(<script src="...">) — remove
+      const docWriteResults = detectDocWriteScript(ast, { source: content, relPath, mainHost });
+      const toRemove = docWriteResults.filter(r => r.shouldRemove);
+      if (toRemove.length > 0) {
+        const ms = new MagicString(content);
+        // Sort descending to avoid position shifts
+        const sorted = [...toRemove].sort((a, b) => b.start - a.start);
+        for (const r of sorted) {
+          let end = r.end;
+          while (end < content.length && /[;\s]/.test(content[end]!)) end++;
+          ms.remove(r.start, end);
+          log.push({
+            file: relPath,
+            type: r.threatType.toUpperCase(),
+            description: r.description,
+            codeSnippet: r.snippet,
+            lineNumber: r.line,
+          });
+          removed++;
+        }
+        content = ms.toString();
+      }
     }
   }
 

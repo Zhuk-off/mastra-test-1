@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { cleanSite, createBackup } from '../src/mastra/cleaners/index.js';
 
 function printUsageAndExit(): never {
-  console.error('Usage: npm run clean -- <siteDir> [--no-backup] [--coverage] [--coverage-threshold=<percent>]');
+  console.error('Usage: npm run clean -- <siteDir> [--no-backup] [--advanced] [--coverage] [--coverage-threshold=<percent>]');
   process.exit(1);
 }
 
@@ -29,16 +29,20 @@ async function main(): Promise<void> {
     console.log(`[clean-site] Резервная копия: ${backupDir}`);
   }
 
+  const runAdvanced = flags.has('--advanced');
   const runCoverage = flags.has('--coverage');
   const thresholdArg = [...flags].find(f => f.startsWith('--coverage-threshold='));
   const deadCoverageThreshold = thresholdArg ? Number(thresholdArg.split('=')[1]) : 1;
 
+  if (runAdvanced) {
+    console.log('[clean-site] Advanced AST-анализ включён');
+  }
   if (runCoverage) {
-    console.log(`[clean-site] Coverage analysis включён (порог: ${deadCoverageThreshold}%)`)
+    console.log(`[clean-site] Coverage analysis включён (порог: ${deadCoverageThreshold}%)`);
   }
 
   const start = Date.now();
-  const stats = await cleanSite(siteDir, { runCoverage, deadCoverageThreshold });
+  const stats = await cleanSite(siteDir, { runAdvanced, runCoverage, deadCoverageThreshold });
   const seconds = ((Date.now() - start) / 1000).toFixed(1);
 
   console.log('');
@@ -94,6 +98,12 @@ async function main(): Promise<void> {
   if (stats.metricFilesRemoved > 0) {
     console.log(`[clean-site] метрик-файлов удалено:   ${stats.metricFilesRemoved}`);
   }
+  if (stats.obfuscatedFilesRemoved > 0) {
+    console.log(`[clean-site] обфусц. JS удалено:      ${stats.obfuscatedFilesRemoved}`);
+  }
+  if (stats.partialJsCleaned > 0) {
+    console.log(`[clean-site] JS частично очищено:     ${stats.partialJsCleaned}`);
+  }
   if (stats.unversionedLibsCdn > 0) {
     console.log(`[clean-site] libs без версии → CDN:   ${stats.unversionedLibsCdn}`);
   }
@@ -102,6 +112,9 @@ async function main(): Promise<void> {
   }
   if (stats.detectorWarnings > 0) {
     console.log(`[clean-site] предупреждений (AST):    ${stats.detectorWarnings}`);
+  }
+  if (stats.phpBackdoorWarning) {
+    console.log('[clean-site] ⚠️  ВНИМАНИЕ: обнаружены PHP-бэкдоры! Требуется ручная проверка.');
   }
   const reduction = stats.bytesBefore - stats.bytesAfter;
   const pct = stats.bytesBefore > 0 ? Math.abs((reduction / stats.bytesBefore) * 100).toFixed(1) : '0.0';

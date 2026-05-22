@@ -120,6 +120,8 @@ export interface HtmlPassResult {
 export type HtmlPass = (html: string, ctx: PassContext) => HtmlPassResult;
 
 export interface CleanSiteOptions {
+  /** Включить AST-анализ JS: metric file detection, obfuscation, exfil extraction */
+  runAdvanced?: boolean;
   /** Запустить Playwright coverage analysis для обнаружения мёртвого JS */
   runCoverage?: boolean;
   /** Порог покрытия ниже которого файл считается мёртвым (по умолчанию 1%) */

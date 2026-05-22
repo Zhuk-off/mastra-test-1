@@ -252,6 +252,49 @@ npm run clean -- <siteDir> --coverage --coverage-threshold=5
 
 ---
 
+## Этап 8 — Visual diff + полная интеграция (2026-05-22)
+
+**Что сделано:**
+- Установлены `pixelmatch` и `pngjs` (`@types/pngjs` в devDeps)
+- Создан `src/mastra/cleaners/passes/js-advanced/verify-visual.ts`:
+  - `takeScreenshot(pageUrl, outputPath)` — скриншот через Playwright
+  - `compareScreenshots(baseline, after, diff)` — сравнение через pixelmatch (порог 0.1)
+  - `verifyVisualDiff(baseline, after, diff)` — обёртка, возвращает `VisualDiffResult { diffPercent }`
+- Добавлен `runAdvanced?: boolean` в `CleanSiteOptions` (`types.ts`)
+- Обновлён `pipeline.ts`:
+  - `BASE_HTML_PASSES` — без `removeInlineExfilPass` (базовый, без --advanced)
+  - `getHtmlPasses(runAdvanced)` — динамически добавляет `removeInlineExfilPass` при advanced
+  - Pre-scan unversioned libs теперь только при `runAdvanced`
+  - `cleanJsFile` вызывается с `runAdvanced`
+  - PHP backdoor scanning только при `runAdvanced`
+- Обновлён `passes/js/clean-js.ts`:
+  - Добавлен 5-й параметр `runAdvanced = false`
+  - Весь AST-анализ (obfuscation, metric file, extract functions, keylogger, redirect, doc.write) обёрнут в `if (runAdvanced)`
+- Обновлён `scripts/clean-site.ts`:
+  - Поддержка флага `--advanced`
+  - Вывод новых stats: `obfuscatedFilesRemoved`, `partialJsCleaned`, `phpBackdoorWarning`
+  - Usage string обновлён
+- Обновлён `src/mastra/tools/clean-site-tool.ts`:
+  - `inputSchema`: добавлены `advanced` и `runCoverage`
+  - `outputSchema`: добавлены все advanced stats (7 новых полей)
+  - `execute`: передаёт `{ runAdvanced: advanced, runCoverage }` в `cleanSite`
+- Обновлён `docs/cleaning-logic.md`:
+  - Раздел 12 CLI: таблица флагов `--advanced`, `--coverage`, `--coverage-threshold`
+  - Новый раздел 13: Advanced JS-анализ (все 7 подпунктов)
+  - Новый раздел 14: Coverage-based dead file detection
+  - Новый раздел 15: Visual diff
+  - Статистика разделена на Базовые / Advanced / Coverage
+
+**Acceptance:**
+- ✅ `npm run build` зелёный
+- ✅ Все тесты — 111/111 passed (8 test files)
+- ✅ `npm run clean -- <dir>` — прежнее поведение (без AST-анализа)
+- ✅ `npm run clean -- <dir> --advanced` — все новые проходы
+- ✅ `npm run clean -- <dir> --advanced --coverage` — + Playwright coverage
+- ✅ `clean-site-tool.ts` — обновлён inputSchema/outputSchema
+
+---
+
 ## Этап 6 — Partial useful extractor (2026-05-22)
 
 **Что сделано:**

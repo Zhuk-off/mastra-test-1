@@ -395,8 +395,9 @@ utils/*.ts           — хелперы (URL, offer-detector, walk, changelog)
 
 ### Статистика (`CleanStats`)
 
-25 полей счётчиков:
+Поля счётчиков `CleanStats`:
 
+**Базовые:**
 - `htmlFilesProcessed` / `phpFilesProcessed`
 - `scriptsRemoved` — `<script src>` + `<iframe>` (tracker)
 - `inlineScriptsRemoved` — inline `<script>` (tracker)
@@ -420,6 +421,18 @@ utils/*.ts           — хелперы (URL, offer-detector, walk, changelog)
 - `offerLinksReplaced` — ссылки заменены на `{offer}`
 - `bytesBefore` / `bytesAfter` — размер HTML/PHP до и после
 
+**Advanced (`--advanced` only):**
+- `inlineExfilRemoved` — inline exfil-вызовов удалено из HTML-скриптов
+- `metricFilesRemoved` — JS-файлы удалены как трекерные (по AST)
+- `obfuscatedFilesRemoved` — JS-файлы удалены как обфусцированные
+- `partialJsCleaned` — JS-файлов частично очищено (exfil-функции удалены)
+- `unversionedLibsCdn` — библиотек без версии заменено на CDN
+- `detectorWarnings` — предупреждений от детекторов (keylogger, redirect, PHP)
+- `phpBackdoorWarning` — `true` если найдены PHP-бэкдоры
+
+**Coverage (`--coverage` only):**
+- `deadJsFilesRemoved` — мёртвых JS-файлов удалено (0% coverage)
+
 ### Лог изменений
 
 `clean-site-changes.log` в корне сайда. Формат TSV:
@@ -435,7 +448,86 @@ utils/*.ts           — хелперы (URL, offer-detector, walk, changelog)
 ## 12. CLI
 
 ```bash
-npm run clean -- <siteDir> [--no-backup]
+npm run clean -- <siteDir> [--no-backup] [--advanced] [--coverage] [--coverage-threshold=<percent>]
 ```
 
-По умолчанию создаёт `siteDir_backup` перед очисткой. Флаг `--no-backup` отключает.
+По умолчанию создаёт `siteDir_backup` перед очисткой.
+
+| Флаг | Описание |
+|------|----------|
+| `--no-backup` | Не создавать резервную копию |
+| `--advanced` | Включить AST-анализ JS (этапы 2–7): metric files, obfuscation, exfil extraction, inline exfil, unversioned libs, PHP backdoors |
+| `--coverage` | Playwright coverage analysis — обнаружение и удаление мёртвых JS-файлов (медленно, 15–30 сек) |
+| `--coverage-threshold=N` | Порог покрытия % ниже которого файл считается мёртвым (по умолчанию 1) |
+
+---
+
+## 13. Advanced JS-анализ (`--advanced`)
+
+Включается флагом `--advanced`. Без него все эти проходы пропускаются.
+
+### 13.1. `removeInlineExfilPass` (HTML, AST)
+
+**Что делает:** В inline `<script>` блоках хирургически удаляет exfil-вызовы через `magic-string`, сохраняя остальной код.
+
+**Удаляет:**
+- `fetch('https://external...')` — внешний хост
+- `navigator.sendBeacon(url)` — внешний хост
+- `new WebSocket('wss://external...')` — внешний хост
+- `new Image().src = 'https://...'` — tracking pixel
+- Вызовы трекерных глобалов: `fbq(...)`, `gtag(...)`, `ym(...)` и др. (из `SUSPICIOUS_CALL_GLOBALS`)
+
+**Оставляет:** `fetch('/api/...')` (внутренний), `fetch('https://fonts.googleapis.com/...')` (trusted), весь остальной код скрипта.
+
+### 13.2. Unversioned libs → CDN (pre-scan)
+
+**Что делает:** Pre-scan всех `.js` файлов без версии в имени. Определяет библиотеку по сигнатуре (первые 4 КБ). Передаёт карту в `replaceLocalLibsWithCdn`.
+
+**Определяет:** jQuery, Bootstrap, Popper.js, Swiper, Lodash.
+
+### 13.3. `detectMetricFile` (JS, AST)
+
+**Что делает:** Удаляет JS-файлы, которые **только** регистрируют трекерные глобалы (`fbq`, `gtag`, `ym` и др.) без полезного кода.
+
+**Критерии:** Присвоение `window.X` где X — трекерный глобал + нет `addEventListener`, `querySelector`, `module.exports`.
+
+### 13.4. `detectObfuscation` (JS)
+
+**Что делает:** Удаляет целиком JS-файлы с обфускацией.
+
+**Признаки:** >15% идентификаторов вида `_0x...`, или `eval(function(p,a,c,k...`, или `String['fromCharCode']`.
+
+### 13.5. `extractUsefulFunctions` (JS, AST)
+
+**Что делает:** Из JS-файлов вырезает функции, которые **только** делают exfil-вызовы.
+
+**Пример удаляемой:** `function trackPageView() { fbq('track', 'PageView'); }`.
+
+**Пример сохраняемой:** `function trackAndSubmit() { fbq('track', e); submitForm(); }` — смешанная логика.
+
+### 13.6. Detector warnings (JS, AST)
+
+**Только логируют (не удаляют):**
+- `KEYLOGGER_WARN` — `addEventListener('keydown', fn)` + сетевой вызов внутри
+- `REDIRECT_WARN` — `window.location = 'https://external...'`
+
+**Удаляют:**
+- `DOC_WRITE_SCRIPT` — `document.write('<script src="https://external...">')` 
+
+### 13.7. PHP backdoor scanner
+
+**Что делает:** Сканирует `.php` файлы на паттерны бэкдоров. Только WARN, не удаляет.
+
+**Паттерны:** `eval($_POST)`, `assert($_GET)`, `system($user_input)`, `preg_replace /e`, `gzinflate(base64_decode(...))`, `move_uploaded_file`, `passthru($_POST)`.
+
+---
+
+## 14. Coverage-based dead file detection (`--coverage`)
+
+Запускает Playwright (headless Chromium), поднимает локальный HTTP-сервер, собирает JS-покрытие при автоскролле + кликах. Файлы с 0% покрытия без event-handlers — удаляются. Файлы с `addEventListener` — защищены (lazy-init).
+
+---
+
+## 15. Visual diff (`verifyVisualDiff`)
+
+Утилита `verify-visual.ts` делает скриншоты до и после через Playwright, сравнивает через `pixelmatch` (порог 0.1), сохраняет diff-изображение. Используется для визуальной проверки отсутствия регрессий.

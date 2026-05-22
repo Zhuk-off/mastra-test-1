@@ -17,6 +17,16 @@ export const cleanSiteTool = createTool({
       .boolean()
       .optional()
       .describe('Set to true to skip creating a backup (default: false — backup is created)'),
+    advanced: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe('Enable AST-based JS analysis: metric file detection, obfuscation removal, exfil extraction'),
+    runCoverage: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe('Run Playwright coverage analysis to detect dead JS files'),
   }),
   outputSchema: z.object({
     siteDir: z.string(),
@@ -47,9 +57,17 @@ export const cleanSiteTool = createTool({
     bytesBefore: z.number(),
     bytesAfter: z.number(),
     bytesReduced: z.number(),
+    deadJsFilesRemoved: z.number(),
+    partialJsCleaned: z.number(),
+    inlineExfilRemoved: z.number(),
+    unversionedLibsCdn: z.number(),
+    metricFilesRemoved: z.number(),
+    obfuscatedFilesRemoved: z.number(),
+    detectorWarnings: z.number(),
+    phpBackdoorWarning: z.boolean(),
     changelogPath: z.string().optional(),
   }),
-  execute: async ({ siteDir, noBackup }) => {
+  execute: async ({ siteDir, noBackup, advanced, runCoverage }) => {
     const resolvedDir = resolve(siteDir);
 
     let backupDir: string | undefined;
@@ -57,7 +75,10 @@ export const cleanSiteTool = createTool({
       backupDir = await createBackup(resolvedDir);
     }
 
-    const stats = await cleanSite(resolvedDir);
+    const stats = await cleanSite(resolvedDir, {
+      runAdvanced: advanced ?? false,
+      runCoverage: runCoverage ?? false,
+    });
 
     return {
       siteDir: resolvedDir,

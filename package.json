@@ -32,11 +32,14 @@
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
     "magic-string": "^0.30.21",
+    "pixelmatch": "^7.2.0",
+    "pngjs": "^7.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/acorn": "^4.0.6",
     "@types/node": "^25.6.2",
+    "@types/pngjs": "^6.0.5",
     "mastra": "^1.8.1",
     "playwright": "1.59.1",
     "tsx": "^4.21.0",
