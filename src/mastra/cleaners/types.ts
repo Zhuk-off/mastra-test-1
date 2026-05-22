@@ -85,6 +85,7 @@ export interface PassContext {
   relPath: string;
   log: ChangelogEntry[];
   cdnReplacements?: Map<string, CdnReplacement>;
+  unversionedLibReplacements?: Map<string, CdnReplacement>;
 }
 
 // Поля CleanStats, относящиеся к HTML-проходам.

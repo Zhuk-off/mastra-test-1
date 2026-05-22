@@ -1,5 +1,5 @@
 import { readFile, writeFile, cp, unlink } from 'node:fs/promises';
-import { extname, relative } from 'node:path';
+import { extname, relative, basename, dirname } from 'node:path';
 import type { CleanStats, HtmlPass, PassContext, HtmlStatsDelta, ChangelogEntry } from './types.js';
 import { extractMainHostFromDir } from './utils/offer-detector.js';
 import { walkFiles } from './utils/walk.js';
@@ -11,6 +11,8 @@ import { removeTrackerExternals } from './passes/fs/remove-tracker-externals.js'
 import { buildCdnReplacements } from './utils/cdn-detector.js';
 import { removeSourceMaps } from './passes/fs/remove-source-maps.js';
 import { normalizeLandingStructure } from './utils/normalize-landing-structure.js';
+import { detectUnversionedLib } from './passes/js-advanced/detectors/detect-unversioned-lib.js';
+import { buildUnversionedCdnReplacements } from './utils/unversioned-cdn-detector.js';
 
 // HTML passes
 import { removeTrackerScripts } from './passes/html/remove-tracker-scripts.js';
@@ -121,6 +123,21 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
   const mainHost = extractMainHostFromDir(siteDir);
   const metricFilesToDelete = new Set<string>();
 
+  // Pre-scan: определяем библиотеки без версии в имени
+  const unversionedLibMap = new Map<string, { lib: { cdnUrl: (version: string) => string }; version: string }>();
+  for await (const file of walkFiles(siteDir)) {
+    const ext = extname(file).toLowerCase();
+    if (ext !== '.js' && ext !== '.mjs') continue;
+    const base = basename(file);
+    if (/[\d]+\.[\d]+\.[\d]+/.test(base)) continue; // версия в имени — обрабатывает cdn-detector
+    const detected = await detectUnversionedLib(file);
+    if (detected) {
+      unversionedLibMap.set(relative(siteDir, file), detected);
+    }
+  }
+
+  const unversionedLibFilesToDelete = new Set<string>();
+
   for await (const file of walkFiles(siteDir)) {
     const ext = extname(file).toLowerCase();
     const relPath = relative(siteDir, file);
@@ -130,6 +147,7 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
       stats.bytesBefore += before.length;
 
       const cdnReplacements = await buildCdnReplacements(siteDir, file, before);
+      const unversionedLibReplacements = await buildUnversionedCdnReplacements(siteDir, file, before, unversionedLibMap);
       const ctx: PassContext = {
         siteDir,
         mainHost,
@@ -137,6 +155,7 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
         relPath,
         log: changelog,
         cdnReplacements,
+        unversionedLibReplacements,
       };
 
       const { html: after, counts } = applyHtmlPasses(before, ctx);
@@ -144,6 +163,15 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
         await writeFile(file, after, 'utf8');
       }
       stats.bytesAfter += after.length;
+
+      // Собираем unversioned-lib файлы, заменённые в этом HTML, для последующего удаления
+      if (unversionedLibReplacements.size > 0) {
+        const fileDir = dirname(file);
+        for (const url of unversionedLibReplacements.keys()) {
+          const absPath = resolve(fileDir, url);
+          unversionedLibFilesToDelete.add(absPath);
+        }
+      }
 
       if (ext === '.php') {
         stats.phpFilesProcessed++;
@@ -206,6 +234,35 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
       const before = await readFile(htmlFile, 'utf8');
       let after = before;
       for (const absPath of metricFilesToDelete) {
+        const rel = relative(siteDir, absPath);
+        const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
+        after = after.replace(re, '');
+      }
+      if (after !== before) {
+        await writeFile(htmlFile, after, 'utf8');
+      }
+    }
+  }
+
+  // Удаляем unversioned-lib файлы, заменённые на CDN, и чистим <script src> в HTML
+  if (unversionedLibFilesToDelete.size > 0) {
+    for (const absPath of unversionedLibFilesToDelete) {
+      try {
+        await unlink(absPath);
+      } catch {
+        // файл уже удалён или не существует — игнорируем
+      }
+    }
+    stats.unversionedLibsCdn += unversionedLibFilesToDelete.size;
+
+    // Удаляем <script src="..."> из HTML, ссылающиеся на удалённые файлы
+    for await (const htmlFile of walkFiles(siteDir)) {
+      const ext = extname(htmlFile).toLowerCase();
+      if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
+      const before = await readFile(htmlFile, 'utf8');
+      let after = before;
+      for (const absPath of unversionedLibFilesToDelete) {
         const rel = relative(siteDir, absPath);
         const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
