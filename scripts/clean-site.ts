@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { cleanSite, createBackup } from '../src/mastra/cleaners/index.js';
 
 function printUsageAndExit(): never {
-  console.error('Usage: npm run clean -- <siteDir> [--no-backup]');
+  console.error('Usage: npm run clean -- <siteDir> [--no-backup] [--coverage] [--coverage-threshold=<percent>]');
   process.exit(1);
 }
 
@@ -29,8 +29,16 @@ async function main(): Promise<void> {
     console.log(`[clean-site] Резервная копия: ${backupDir}`);
   }
 
+  const runCoverage = flags.has('--coverage');
+  const thresholdArg = [...flags].find(f => f.startsWith('--coverage-threshold='));
+  const deadCoverageThreshold = thresholdArg ? Number(thresholdArg.split('=')[1]) : 1;
+
+  if (runCoverage) {
+    console.log(`[clean-site] Coverage analysis включён (порог: ${deadCoverageThreshold}%)`)
+  }
+
   const start = Date.now();
-  const stats = await cleanSite(siteDir);
+  const stats = await cleanSite(siteDir, { runCoverage, deadCoverageThreshold });
   const seconds = ((Date.now() - start) / 1000).toFixed(1);
 
   console.log('');
@@ -80,6 +88,21 @@ async function main(): Promise<void> {
   console.log(`[clean-site] .map файлов удалено:     ${stats.sourceMapsDeleted}`);
   console.log(`[clean-site] sourceMappingURL убрано: ${stats.sourceMapRefsStripped}`);
   console.log(`[clean-site] оффер-ссылок заменено:  ${stats.offerLinksReplaced}`);
+  if (stats.inlineExfilRemoved > 0) {
+    console.log(`[clean-site] inline exfil удалено:    ${stats.inlineExfilRemoved}`);
+  }
+  if (stats.metricFilesRemoved > 0) {
+    console.log(`[clean-site] метрик-файлов удалено:   ${stats.metricFilesRemoved}`);
+  }
+  if (stats.unversionedLibsCdn > 0) {
+    console.log(`[clean-site] libs без версии → CDN:   ${stats.unversionedLibsCdn}`);
+  }
+  if (stats.deadJsFilesRemoved > 0) {
+    console.log(`[clean-site] мёртвых JS удалено:      ${stats.deadJsFilesRemoved}`);
+  }
+  if (stats.detectorWarnings > 0) {
+    console.log(`[clean-site] предупреждений (AST):    ${stats.detectorWarnings}`);
+  }
   const reduction = stats.bytesBefore - stats.bytesAfter;
   const pct = stats.bytesBefore > 0 ? Math.abs((reduction / stats.bytesBefore) * 100).toFixed(1) : '0.0';
   const sign = reduction >= 0 ? '-' : '+';

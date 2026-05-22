@@ -1,6 +1,6 @@
-import { readFile, writeFile, cp, unlink } from 'node:fs/promises';
-import { extname, relative, basename, dirname, resolve } from 'node:path';
-import type { CleanStats, HtmlPass, PassContext, HtmlStatsDelta, ChangelogEntry } from './types.js';
+import { readFile, writeFile, cp, unlink, rm } from 'node:fs/promises';
+import { extname, relative, basename, dirname, resolve, join } from 'node:path';
+import type { CleanStats, HtmlPass, PassContext, HtmlStatsDelta, ChangelogEntry, CleanSiteOptions } from './types.js';
 import { extractMainHostFromDir } from './utils/offer-detector.js';
 import { walkFiles } from './utils/walk.js';
 import { writeChangelog } from './utils/changelog.js';
@@ -13,11 +13,14 @@ import { removeSourceMaps } from './passes/fs/remove-source-maps.js';
 import { normalizeLandingStructure } from './utils/normalize-landing-structure.js';
 import { detectUnversionedLib, type DetectedLib } from './passes/js-advanced/detectors/detect-unversioned-lib.js';
 import { buildUnversionedCdnReplacements } from './utils/unversioned-cdn-detector.js';
+import { collectCoverage } from './passes/js-advanced/coverage/collect-coverage.js';
+import { analyzeDeadFiles } from './passes/js-advanced/coverage/analyze-coverage.js';
 
 // HTML passes
 import { removeTrackerScripts } from './passes/html/remove-tracker-scripts.js';
 import { removeTrackerJsonLd } from './passes/html/remove-tracker-jsonld.js';
 import { removeInlineTrackers } from './passes/html/remove-inline-trackers.js';
+import { removeInlineExfilPass } from './passes/html/remove-inline-exfil-pass.js';
 import { removeNoscriptTrackers } from './passes/html/remove-noscript-trackers.js';
 import { removeTrackerLinks } from './passes/html/remove-tracker-links.js';
 import { removeTrackerMetas } from './passes/html/remove-tracker-metas.js';
@@ -38,6 +41,7 @@ const HTML_PASSES: HtmlPass[] = [
   removeTrackerScripts,      // 1: <script src>
   removeTrackerJsonLd,       // 2a: JSON-LD ветка
   removeInlineTrackers,      // 2b: остальные inline <script>
+  removeInlineExfilPass,     // 2c: хирургическое удаление exfil из inline <script>
   removeNoscriptTrackers,    // 3: <noscript> ДО iframe — иначе GTM noscript-iframe осиротеет
   removeTrackerLinks,        // 4
   removeTrackerMetas,        // 5a
@@ -78,7 +82,7 @@ export async function createBackup(siteDir: string): Promise<string> {
   return backupDir;
 }
 
-export async function cleanSite(siteDir: string): Promise<CleanStats> {
+export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Promise<CleanStats> {
   const stats: CleanStats = {
     htmlFilesProcessed: 0,
     phpFilesProcessed: 0,
@@ -192,6 +196,7 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
       stats.localLibsReplaced += counts.localLibsReplaced ?? 0;
       stats.eventAttrsRemoved += counts.eventAttrsRemoved ?? 0;
       stats.offerLinksReplaced += counts.offerLinksReplaced ?? 0;
+      stats.inlineExfilRemoved += counts.inlineExfilRemoved ?? 0;
       continue;
     }
 
@@ -281,6 +286,53 @@ export async function cleanSite(siteDir: string): Promise<CleanStats> {
   const { mapsDeleted, filesStripped } = await removeSourceMaps(siteDir);
   stats.sourceMapsDeleted = mapsDeleted;
   stats.sourceMapRefsStripped = filesStripped;
+
+  // Coverage-based dead file detection (опционально)
+  if (options?.runCoverage) {
+    const coverages = await collectCoverage(siteDir);
+    const deadFiles = analyzeDeadFiles(
+      coverages,
+      siteDir,
+      options.deadCoverageThreshold ?? 1,
+    );
+
+    const deadFilesToDelete = new Set<string>();
+    for (const file of deadFiles) {
+      if (!file.isDead) continue;
+      const absPath = join(siteDir, file.relPath);
+      try {
+        await rm(absPath, { force: true });
+      } catch {
+        // ignore
+      }
+      stats.deadJsFilesRemoved++;
+      changelog.push({
+        file: file.relPath,
+        type: 'DEAD_JS_FILE',
+        description: file.reason,
+      });
+      deadFilesToDelete.add(absPath);
+    }
+
+    // Удаляем <script src="..."> из HTML, ссылающиеся на удалённые dead-файлы
+    if (deadFilesToDelete.size > 0) {
+      for await (const htmlFile of walkFiles(siteDir)) {
+        const ext = extname(htmlFile).toLowerCase();
+        if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
+        const before = await readFile(htmlFile, 'utf8');
+        let after = before;
+        for (const absPath of deadFilesToDelete) {
+          const rel = relative(siteDir, absPath);
+          const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
+          after = after.replace(re, '');
+        }
+        if (after !== before) {
+          await writeFile(htmlFile, after, 'utf8');
+        }
+      }
+    }
+  }
 
   // Пишем лог изменений
   await writeChangelog(siteDir, changelog);

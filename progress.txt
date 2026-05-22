@@ -184,3 +184,68 @@
 - ✅ `npm run build` зелёный
 - ✅ Регрессионный `diff -r /tmp/before-test /tmp/after-test` пуст
 - ✅ Регрессионный `diff` логов очистки идентичен (разница только в путях)
+
+---
+
+## Этап 4 — Inline exfil в HTML (AST surgical) (2026-05-22)
+
+**Что сделано:**
+- Создан `src/mastra/cleaners/registry/suspicious-globals.ts` — реестр трекерных глобалов (fbq, gtag, ym и др.).
+- Обновлён `src/mastra/cleaners/registry/trusted-hosts.ts` — добавлена функция `isTrustedHost()` для проверки exact + subdomain match.
+- Создан `src/mastra/cleaners/passes/js-advanced/detectors/detect-exfil-calls.ts` — AST-детектор угроз:
+  - `fetch()` на внешний хост
+  - `navigator.sendBeacon()` на внешний хост
+  - вызовы трекерных глобалов (`fbq`, `gtag`, ...)
+  - `new WebSocket('wss://...')` на внешний хост
+  - `new Image().src = '...'` с внешним пикселем
+  - `document.write()` инжектящий внешний `<script src>`
+- Создан `src/mastra/cleaners/passes/js-advanced/remove-inline-exfil.ts` — хирургическое удаление через `magic-string` (от конца к началу, без сдвига позиций).
+- Создан `src/mastra/cleaners/passes/html/remove-inline-exfil-pass.ts` — HTML-проход, обрабатывающий inline `<script>` блоки без `src`.
+- Обновлён `src/mastra/cleaners/types.ts` — добавлен `inlineExfilRemoved` в `HtmlStatsKey`.
+- Обновлён `src/mastra/cleaners/pipeline.ts`:
+  - импорт `removeInlineExfilPass`
+  - добавлен в `HTML_PASSES` после `removeInlineTrackers`
+  - агрегация `stats.inlineExfilRemoved`
+- Создан `src/mastra/cleaners/passes/js-advanced/__tests__/remove-inline-exfil.test.ts` — 10 тестов, все зелёные.
+
+**Acceptance:**
+- ✅ `npm run build` зелёный
+- ✅ Тесты `remove-inline-exfil.test.ts` — 10/10 passed
+
+---
+
+## Этап 5 — Coverage-based dead file detection (2026-05-22)
+
+**Что сделано:**
+- Создан `src/mastra/cleaners/passes/js-advanced/coverage/collect-coverage.ts`:
+  - Поднимает локальный HTTP-сервер на случайном порту
+  - Запускает Playwright с `startJSCoverage`, автоскролл + клики по CTA
+  - Блокирует внешние запросы (только локальный код)
+  - Закрывает браузер и сервер в `finally`
+- Создан `src/mastra/cleaners/passes/js-advanced/coverage/analyze-coverage.ts`:
+  - `analyzeDeadFiles()` — анализирует результаты coverage
+  - Файл с 0% покрытия и без event-handlers → `isDead: true`
+  - Файл с `addEventListener`/`window.onload` → `isDead: false` (защита lazy-init)
+  - Пропускает inline-скрипты (relPath === null) и несуществующие файлы
+  - Поддерживает кастомный порог
+- Обновлён `src/mastra/cleaners/types.ts` — `CleanSiteOptions` с полями `runCoverage`, `deadCoverageThreshold`
+- Обновлён `src/mastra/cleaners/pipeline.ts`:
+  - `cleanSite(siteDir, options?)` — принимает опции
+  - Блок coverage в конце: удаляет мёртвые файлы + зачищает `<script src>` из HTML
+- Обновлён `scripts/clean-site.ts`:
+  - Поддержка флагов `--coverage` и `--coverage-threshold=N`
+  - Вывод новых stats: inlineExfilRemoved, metricFilesRemoved, unversionedLibsCdn, deadJsFilesRemoved, detectorWarnings
+- Создан `src/mastra/cleaners/passes/js-advanced/coverage/__tests__/analyze-coverage.test.ts` — 7 тестов, все зелёные
+
+**CLI-примеры:**
+```bash
+npm run clean -- <siteDir>                         # без coverage
+npm run clean -- <siteDir> --coverage              # + Playwright coverage (порог 1%)
+npm run clean -- <siteDir> --coverage --coverage-threshold=5
+```
+
+**Acceptance:**
+- ✅ `npm run build` зелёный
+- ✅ Все тесты js-advanced — 33/33 passed (5 test files)
+- ✅ `analyzeDeadFiles` корректно защищает lazy-init файлы
+- ✅ Сервер закрывается в `finally` даже при ошибке

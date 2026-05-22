@@ -103,7 +103,8 @@ export type HtmlStatsKey =
   | 'framesRemoved'
   | 'localLibsReplaced'
   | 'eventAttrsRemoved'
-  | 'offerLinksReplaced';
+  | 'offerLinksReplaced'
+  | 'inlineExfilRemoved';
 
 export type HtmlStatsDelta = Partial<Record<HtmlStatsKey, number>>;
 
@@ -115,6 +116,8 @@ export interface HtmlPassResult {
 export type HtmlPass = (html: string, ctx: PassContext) => HtmlPassResult;
 
 export interface CleanSiteOptions {
-  // Зарезервировано на будущее. В этом рефакторинге не использовать.
-  readonly _reserved?: never;
+  /** Запустить Playwright coverage analysis для обнаружения мёртвого JS */
+  runCoverage?: boolean;
+  /** Порог покрытия ниже которого файл считается мёртвым (по умолчанию 1%) */
+  deadCoverageThreshold?: number;
 }
