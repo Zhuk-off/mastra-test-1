@@ -5,7 +5,7 @@ import { extractMainHostFromDir } from './utils/offer-detector.js';
 import { walkFiles } from './utils/walk.js';
 import { writeChangelog } from './utils/changelog.js';
 import { cleanSvgFile } from './passes/svg/clean-svg.js';
-import { cleanJsFile } from './passes/js/clean-js.js';
+import { cleanJsFile, type CleanJsResult } from './passes/js/clean-js.js';
 import { cleanCssFile } from './passes/css/clean-css.js';
 import { removeTrackerExternals } from './passes/fs/remove-tracker-externals.js';
 import { buildCdnReplacements } from './utils/cdn-detector.js';
@@ -208,13 +208,14 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
 
     if (ext === '.js' || ext === '.mjs') {
-      const removed = await cleanJsFile(file, relPath, changelog);
+      const result: CleanJsResult = await cleanJsFile(file, relPath, changelog, mainHost);
       stats.jsFilesScanned++;
-      if (removed === 9999) {
+      if (result.isMetricFile) {
         metricFilesToDelete.add(file);
         continue;
       }
-      stats.jsItemsRemoved += removed;
+      stats.jsItemsRemoved += result.removed;
+      if (result.partialCleaned) stats.partialJsCleaned++;
       continue;
     }
 

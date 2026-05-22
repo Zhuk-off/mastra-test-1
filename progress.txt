@@ -249,3 +249,33 @@ npm run clean -- <siteDir> --coverage --coverage-threshold=5
 - ✅ Все тесты js-advanced — 33/33 passed (5 test files)
 - ✅ `analyzeDeadFiles` корректно защищает lazy-init файлы
 - ✅ Сервер закрывается в `finally` даже при ошибке
+
+---
+
+## Этап 6 — Partial useful extractor (2026-05-22)
+
+**Что сделано:**
+- Создан `src/mastra/cleaners/passes/js-advanced/extract-useful-functions.ts`:
+  - `extractUsefulFunctions(source, ast, ctx, log)` — чисто-функциональный экстрактор
+  - Использует `detectExfilCalls()` (этап 4) для поиска exfil-вызовов в файле
+  - Проходит по `FunctionDeclaration` и `VariableDeclaration` (с `FunctionExpression` / `ArrowFunctionExpression`)
+  - Если **все** вызовы внутри функции — exfil-вызовы (SUSPICIOUS_CALL_GLOBALS, fetch на внешний хост и т.д.) и нет DOM-операций → функция помечается к удалению
+  - Удаление через `magic-string` (от конца к началу, без сдвига позиций)
+  - Консервативная стратегия: при малейших сомнениях (смешанная логика, DOM, пустые функции) — оставляем
+- Обновлён `src/mastra/cleaners/passes/js/clean-js.ts`:
+  - Новый интерфейс `CleanJsResult { removed, partialCleaned, isMetricFile }` вместо `number`
+  - `cleanJsFile()` принимает `mainHost` (4-й аргумент, по умолчанию `''`)
+  - Вызывает `extractUsefulFunctions` после проверки метрик-файла
+- Обновлён `src/mastra/cleaners/pipeline.ts`:
+  - Импортирует `CleanJsResult`
+  - Передаёт `mainHost` в `cleanJsFile`
+  - Агрегирует `stats.partialJsCleaned` когда `result.partialCleaned === true`
+- Создан `src/mastra/cleaners/passes/js-advanced/__tests__/extract-useful-functions.test.ts` — 11 тестов
+
+**Acceptance:**
+- ✅ `npm run build` зелёный
+- ✅ Все тесты — 89/89 passed (7 test files)
+- ✅ `function trackPageView() { fbq('track', 'PageView'); }` — удаляется
+- ✅ `function trackAndSubmit(e) { fbq('track', e); submitForm(); }` — не тронута (смешанная)
+- ✅ Функции с DOM-операциями — не тронуты
+- ✅ `stats.partialJsCleaned` корректно инкрементируется в pipeline

@@ -5,12 +5,20 @@ import { removeEvalObfuscation } from './remove-eval-obfuscation.js';
 import { warnSuspiciousPatterns } from './warn-suspicious-patterns.js';
 import { parseJs } from '../js-advanced/ast/parse.js';
 import { detectMetricFile } from '../js-advanced/detectors/detect-metric-file.js';
+import { extractUsefulFunctions } from '../js-advanced/extract-useful-functions.js';
+
+export interface CleanJsResult {
+  removed: number;
+  partialCleaned: boolean;
+  isMetricFile: boolean;
+}
 
 export async function cleanJsFile(
   filePath: string,
   relPath: string,
   log: ChangelogEntry[],
-): Promise<number> {
+  mainHost = '',
+): Promise<CleanJsResult> {
   const original = await readFile(filePath, 'utf8');
   let content = original;
   let removed = 0;
@@ -35,11 +43,18 @@ export async function cleanJsFile(
         description: check.reason,
         lineNumber: 1,
       });
-      // Маркер для pipeline: файл — метрик-файл, нужно удалить
-      return 9999;
+      return { removed: 0, partialCleaned: false, isMetricFile: true };
+    }
+
+    // Вырезаем функции, которые только делают exfil-вызовы (Stage 6)
+    const ctx = { source: content, relPath, mainHost };
+    const extracted = extractUsefulFunctions(content, ast, ctx, log);
+    if (extracted.removed > 0) {
+      content = extracted.code;
+      removed += extracted.removed;
     }
   }
 
   if (content !== original) await writeFile(filePath, content, 'utf8');
-  return removed;
+  return { removed, partialCleaned: removed > 0, isMetricFile: false };
 }
