@@ -1,21 +1,25 @@
-import type { HtmlPass } from '../../types.js';
-import { urlMatchesTracker } from '../../utils/url.js';
+import type { DomPass } from '../../types.js';
+import { classifyResource } from '../../utils/allowlist.js';
+import { quarantineNode, logChange } from '../../utils/quarantine.js';
 
-export const removeImgPixels: HtmlPass = (html, _ctx) => {
-  const counts: Partial<Record<'imgPixelsRemoved', number>> = {};
+/**
+ * <img src>: трекинг-пиксели и картинки с чужих хостов. Своя инфраструктура
+ * (CloudFront/S3) и доверенные CDN — остаются; чужой хост — карантин;
+ * трекинг-пиксель (по имени файла) — удаляем.
+ */
+export const removeImgPixels: DomPass = ($, ctx) => {
   let imgPixelsRemoved = 0;
-
-  html = html.replace(
-    /<img\b([^>]*?)\bsrc\s*=\s*(['"])([^'"]+)\2([^>]*?)\/?>/gi,
-    (whole, _pre, _q, src: string) => {
-      if (urlMatchesTracker(src)) {
-        imgPixelsRemoved++;
-        return '';
-      }
-      return whole;
-    },
-  );
-
-  if (imgPixelsRemoved > 0) counts.imgPixelsRemoved = imgPixelsRemoved;
-  return { html, counts };
+  $('img[src]').each((_, el) => {
+    const src = $(el).attr('src') ?? '';
+    const c = classifyResource(src, 'img');
+    if (c.action === 'remove') {
+      logChange(ctx, 'IMG_PIXEL_REMOVED', c.reason, src);
+      $(el).remove();
+      imgPixelsRemoved++;
+    } else if (c.action === 'quarantine') {
+      quarantineNode($, el, ctx, 'img', `${c.reason} (src=${src})`);
+      imgPixelsRemoved++;
+    }
+  });
+  return imgPixelsRemoved ? { imgPixelsRemoved } : {};
 };

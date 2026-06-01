@@ -1,34 +1,41 @@
-import type { HtmlPass, HtmlPassResult, PassContext } from '../../types.js';
+import type { DomPass } from '../../types.js';
 import { parseJs } from '../js-advanced/ast/parse.js';
 import { removeInlineExfil } from '../js-advanced/remove-inline-exfil.js';
 
-const INLINE_SCRIPT_RE = /<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/gi;
+/**
+ * AST-хирургия inline <script>: вырезает exfil-вызовы (fetch/sendBeacon/WebSocket/
+ * new Image().src/document.write(<script src>)) на ВНЕШНИЕ хосты, сохраняя
+ * остальной код. Только в advanced-режиме. Содержимое <script> ставится сырым
+ * (cheerio не экранирует текст внутри raw-text элементов).
+ */
+export const removeInlineExfilPass: DomPass = ($, ctx) => {
+  let inlineExfilRemoved = 0;
 
-export const removeInlineExfilPass: HtmlPass = (html, ctx): HtmlPassResult => {
-  let result = html;
-  let removed = 0;
+  $('script:not([src])').each((_, el) => {
+    const type = ($(el).attr('type') ?? '').toLowerCase();
+    if (type === 'application/ld+json') return;
 
-  result = result.replace(INLINE_SCRIPT_RE, (fullMatch, scriptBody: string) => {
-    if (!scriptBody.trim()) return fullMatch;
+    const body = $(el).text();
+    if (!body || !body.trim()) return;
 
-    const ast = parseJs(scriptBody, ctx.relPath);
-    if (!ast) return fullMatch; // не смогли распарсить — не трогаем
+    const ast = parseJs(body, ctx.relPath);
+    if (!ast) return; // не парсится — не трогаем
 
-    const { code, removed: r } = removeInlineExfil(
-      scriptBody,
-      { source: scriptBody, relPath: ctx.relPath, mainHost: ctx.mainHost },
+    const { code, removed } = removeInlineExfil(
+      body,
+      { source: body, relPath: ctx.relPath, mainHost: ctx.mainHost },
       ast,
       ctx.log,
     );
-    removed += r;
+    if (removed === 0) return;
 
-    if (r === 0) return fullMatch;
-    if (!code.trim()) return ''; // весь блок стал пустым
-    // Заменяем только тело скрипта, сохраняя открывающий/закрывающий тег
-    const bodyStart = fullMatch.indexOf('>') + 1;
-    const bodyEnd = fullMatch.lastIndexOf('</script>');
-    return fullMatch.slice(0, bodyStart) + code + fullMatch.slice(bodyEnd);
+    inlineExfilRemoved += removed;
+    if (!code.trim()) {
+      $(el).remove();
+    } else {
+      $(el).text(code);
+    }
   });
 
-  return { html: result, counts: { inlineExfilRemoved: removed } };
+  return inlineExfilRemoved ? { inlineExfilRemoved } : {};
 };

@@ -1,17 +1,8 @@
-import type { HtmlPass } from '../../types.js';
+import type { DomPass } from '../../types.js';
 
-export const removeBase: HtmlPass = (html, _ctx) => {
-  const counts: Partial<Record<'baseHrefRemoved', number>> = {};
-  let baseHrefRemoved = 0;
-
-  html = html.replace(
-    /<base\b[^>]*\/?>/gi,
-    () => {
-      baseHrefRemoved++;
-      return '';
-    },
-  );
-
-  if (baseHrefRemoved > 0) counts.baseHrefRemoved = baseHrefRemoved;
-  return { html, counts };
+/** Удаляем <base> — он ломает относительные пути после переноса лендинга. */
+export const removeBase: DomPass = ($) => {
+  const n = $('base').length;
+  if (n > 0) $('base').remove();
+  return n ? { baseHrefRemoved: n } : {};
 };

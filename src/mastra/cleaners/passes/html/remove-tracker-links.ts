@@ -1,29 +1,39 @@
-import type { HtmlPass } from '../../types.js';
+import type { DomPass } from '../../types.js';
 import { PRECONNECT_RELS } from '../../registry/tracker-hosts.js';
 import { urlMatchesTracker } from '../../utils/url.js';
+import { classifyResource, isAbsoluteUrl } from '../../utils/allowlist.js';
+import { quarantineNode, logChange } from '../../utils/quarantine.js';
 
-export const removeTrackerLinks: HtmlPass = (html, _ctx) => {
-  const counts: Partial<Record<'linksRemoved', number>> = {};
+/**
+ * <link>: preconnect/dns-prefetch/preload на трекеры — удаляем; внешний
+ * stylesheet вне белого списка — карантин (известный трекер — удаляем).
+ */
+export const removeTrackerLinks: DomPass = ($, ctx) => {
   let linksRemoved = 0;
+  $('link[href]').each((_, el) => {
+    const rel = ($(el).attr('rel') ?? '').toLowerCase().trim();
+    const href = $(el).attr('href') ?? '';
 
-  html = html.replace(
-    /<link\b([^>]*?)\/?>/gi,
-    (whole, attrs: string) => {
-      const relMatch = /\brel\s*=\s*(['"])([^'"]+)\1/i.exec(attrs);
-      const hrefMatch = /\bhref\s*=\s*(['"])([^'"]+)\1/i.exec(attrs);
-      if (!relMatch || !hrefMatch) return whole;
-      const rel = relMatch[2]?.toLowerCase() ?? '';
-      const href = hrefMatch[2] ?? '';
-      // Удаляем preconnect/dns-prefetch/preload на трекеров
-      if (PRECONNECT_RELS.has(rel) && urlMatchesTracker(href)) {
+    if (PRECONNECT_RELS.has(rel)) {
+      if (urlMatchesTracker(href)) {
+        logChange(ctx, 'LINK_REMOVED', `preconnect/prefetch трекер`, href);
+        $(el).remove();
         linksRemoved++;
-        return '';
       }
-      // pingback / RSS feed / oembed — оставляем, ничего не делаем
-      return whole;
-    },
-  );
+      return;
+    }
 
-  if (linksRemoved > 0) counts.linksRemoved = linksRemoved;
-  return { html, counts };
+    if (rel === 'stylesheet' && isAbsoluteUrl(href)) {
+      const c = classifyResource(href, 'stylesheet');
+      if (c.action === 'remove') {
+        logChange(ctx, 'LINK_REMOVED', c.reason, href);
+        $(el).remove();
+        linksRemoved++;
+      } else if (c.action === 'quarantine') {
+        quarantineNode($, el, ctx, 'link-stylesheet', `${c.reason} (href=${href})`);
+        linksRemoved++;
+      }
+    }
+  });
+  return linksRemoved ? { linksRemoved } : {};
 };

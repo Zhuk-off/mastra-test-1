@@ -1,3 +1,5 @@
+import type { CheerioAPI } from 'cheerio';
+
 /**
  * Stats returned by normalizeLandingStructure.
  * - pathsRewritten    — number of *resources* for which at least one replacement was made in HTML.
@@ -65,6 +67,10 @@ export interface CleanStats {
   detectorWarnings: number;
   /** JS-файлы удалены как обфусцированные (_0x vars, eval packer, fromCharCode) */
   obfuscatedFilesRemoved: number;
+  /** Узлы/файлы, помещённые в карантин (требуют ревью человеком) */
+  quarantinedItems: number;
+  /** CSP-политика внедрена в HTML */
+  cspInjected: number;
   /** true если найдены PHP-бэкдоры (require manual inspection) */
   phpBackdoorWarning: boolean;
 }
@@ -82,6 +88,18 @@ export interface ChangelogEntry {
   lineNumber?: number;
 }
 
+/** Элемент, помещённый в карантин (вырезан со страницы, сохранён для ревью). */
+export interface QuarantineItem {
+  /** Тип: script | iframe | link | inline-script | js-file | ... */
+  kind: string;
+  /** Почему помещён в карантин. */
+  reason: string;
+  /** HTML/код фрагмента (обрезан). */
+  snippet: string;
+  /** Файл, где найдено (relPath). */
+  file: string;
+}
+
 export interface PassContext {
   siteDir: string;
   mainHost: string;
@@ -90,6 +108,8 @@ export interface PassContext {
   log: ChangelogEntry[];
   cdnReplacements?: Map<string, CdnReplacement>;
   unversionedLibReplacements?: Map<string, CdnReplacement>;
+  /** Накопитель карантина (заполняется проходами, сбрасывается на диск в pipeline). */
+  quarantine?: QuarantineItem[];
 }
 
 // Поля CleanStats, относящиеся к HTML-проходам.
@@ -108,7 +128,8 @@ export type HtmlStatsKey =
   | 'localLibsReplaced'
   | 'eventAttrsRemoved'
   | 'offerLinksReplaced'
-  | 'inlineExfilRemoved';
+  | 'inlineExfilRemoved'
+  | 'cspInjected';
 
 export type HtmlStatsDelta = Partial<Record<HtmlStatsKey, number>>;
 
@@ -117,7 +138,11 @@ export interface HtmlPassResult {
   counts: HtmlStatsDelta;
 }
 
+/** Старый строковый проход (regex). Оставлен для совместимости. */
 export type HtmlPass = (html: string, ctx: PassContext) => HtmlPassResult;
+
+/** Новый проход по DOM (cheerio). Мутирует дерево на месте, возвращает счётчики. */
+export type DomPass = (dom: CheerioAPI, ctx: PassContext) => HtmlStatsDelta;
 
 export interface CleanSiteOptions {
   /** Включить AST-анализ JS: metric file detection, obfuscation, exfil extraction */

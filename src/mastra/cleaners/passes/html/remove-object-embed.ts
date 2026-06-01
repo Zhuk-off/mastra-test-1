@@ -1,32 +1,25 @@
-import type { HtmlPass } from '../../types.js';
-import { isExternalUrl } from '../../utils/url.js';
+import type { DomPass } from '../../types.js';
+import { classifyResource } from '../../utils/allowlist.js';
+import { quarantineNode, logChange } from '../../utils/quarantine.js';
 
-export const removeObjectEmbed: HtmlPass = (html, _ctx) => {
-  const counts: Partial<Record<'objectEmbedsRemoved', number>> = {};
+/** <object> — удаляем все; <embed src> — внешние по белому списку. */
+export const removeObjectEmbed: DomPass = ($, ctx) => {
   let objectEmbedsRemoved = 0;
 
-  // <object ...> — удаляем ВСЕ безусловно
-  html = html.replace(
-    /<object\b([^>]*?)>([\s\S]*?)<\/object>/gi,
-    () => {
+  $('object').each((_, el) => {
+    logChange(ctx, 'OBJECT_REMOVED', '<object> удалён безусловно');
+    $(el).remove();
+    objectEmbedsRemoved++;
+  });
+
+  $('embed[src]').each((_, el) => {
+    const src = $(el).attr('src') ?? '';
+    const c = classifyResource(src, 'iframe');
+    if (c.action !== 'keep') {
+      quarantineNode($, el, ctx, 'embed', `${c.reason} (src=${src})`);
       objectEmbedsRemoved++;
-      return '';
-    },
-  );
+    }
+  });
 
-  // <embed src="..."> с внешними ресурсами
-  html = html.replace(
-    /<embed\b([^>]*?)\/?>/gi,
-    (whole, attrs: string) => {
-      const srcMatch = /\bsrc\s*=\s*(['"])([^'"]+)\1/i.exec(attrs);
-      if (srcMatch && isExternalUrl(srcMatch[2]!)) {
-        objectEmbedsRemoved++;
-        return '';
-      }
-      return whole;
-    },
-  );
-
-  if (objectEmbedsRemoved > 0) counts.objectEmbedsRemoved = objectEmbedsRemoved;
-  return { html, counts };
+  return objectEmbedsRemoved ? { objectEmbedsRemoved } : {};
 };

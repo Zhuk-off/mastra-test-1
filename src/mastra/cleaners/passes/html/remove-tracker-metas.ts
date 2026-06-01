@@ -1,25 +1,17 @@
-import type { HtmlPass } from '../../types.js';
+import type { DomPass } from '../../types.js';
 import { TRACKER_META_NAMES } from '../../registry/meta-names.js';
 
-export const removeTrackerMetas: HtmlPass = (html, _ctx) => {
-  const counts: Partial<Record<'metasRemoved', number>> = {};
+const LOWER_NAMES = TRACKER_META_NAMES.map((n) => n.toLowerCase());
+
+/** <meta name="...verification"> поисковиков/соцсетей — не нужны (сайты не индексируются). */
+export const removeTrackerMetas: DomPass = ($) => {
   let metasRemoved = 0;
-
-  html = html.replace(
-    /<meta\b([^>]*?)\/?>/gi,
-    (whole, attrs: string) => {
-      const nameMatch = /\bname\s*=\s*(['"])([^'"]+)\1/i.exec(attrs);
-      if (nameMatch) {
-        const name = nameMatch[2]?.toLowerCase() ?? '';
-        if (TRACKER_META_NAMES.includes(name)) {
-          metasRemoved++;
-          return '';
-        }
-      }
-      return whole;
-    },
-  );
-
-  if (metasRemoved > 0) counts.metasRemoved = metasRemoved;
-  return { html, counts };
+  $('meta[name]').each((_, el) => {
+    const name = ($(el).attr('name') ?? '').toLowerCase();
+    if (LOWER_NAMES.includes(name)) {
+      $(el).remove();
+      metasRemoved++;
+    }
+  });
+  return metasRemoved ? { metasRemoved } : {};
 };

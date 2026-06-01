@@ -1,9 +1,12 @@
 import { readFile, writeFile, cp, unlink, rm } from 'node:fs/promises';
 import { extname, relative, basename, dirname, resolve, join } from 'node:path';
-import type { CleanStats, HtmlPass, PassContext, HtmlStatsDelta, ChangelogEntry, CleanSiteOptions } from './types.js';
+import type { CleanStats, DomPass, PassContext, HtmlStatsDelta, ChangelogEntry, CleanSiteOptions, QuarantineItem } from './types.js';
 import { extractMainHostFromDir } from './utils/offer-detector.js';
 import { walkFiles } from './utils/walk.js';
 import { writeChangelog } from './utils/changelog.js';
+import { parseHtml, serializeHtml, hasServerTags } from './utils/html-dom.js';
+import { writeQuarantine } from './utils/quarantine.js';
+import { writeCleanReport } from './utils/report.js';
 import { cleanSvgFile } from './passes/svg/clean-svg.js';
 import { cleanJsFile, type CleanJsResult } from './passes/js/clean-js.js';
 import { cleanCssFile } from './passes/css/clean-css.js';
@@ -17,82 +20,82 @@ import { collectCoverage } from './passes/js-advanced/coverage/collect-coverage.
 import { analyzeDeadFiles } from './passes/js-advanced/coverage/analyze-coverage.js';
 import { detectPhpBackdoors } from './passes/php/detect-php-backdoors.js';
 
-// HTML passes
+// HTML passes (DOM/cheerio)
+import { removeBase } from './passes/html/remove-base.js';
+import { replaceLocalLibsWithCdn } from './passes/html/replace-local-libs-with-cdn.js';
 import { removeTrackerScripts } from './passes/html/remove-tracker-scripts.js';
 import { removeTrackerJsonLd } from './passes/html/remove-tracker-jsonld.js';
 import { removeInlineTrackers } from './passes/html/remove-inline-trackers.js';
-import { removeInlineExfilPass } from './passes/html/remove-inline-exfil-pass.js';
 import { removeNoscriptTrackers } from './passes/html/remove-noscript-trackers.js';
 import { removeTrackerLinks } from './passes/html/remove-tracker-links.js';
 import { removeTrackerMetas } from './passes/html/remove-tracker-metas.js';
 import { removeMetaRefresh } from './passes/html/remove-meta-refresh.js';
 import { removeTrackerIframes } from './passes/html/remove-tracker-iframes.js';
 import { removeImgPixels } from './passes/html/remove-img-pixels.js';
-import { removeBase } from './passes/html/remove-base.js';
 import { removeObjectEmbed } from './passes/html/remove-object-embed.js';
 import { removeFrames } from './passes/html/remove-frames.js';
-import { replaceLocalLibsWithCdn } from './passes/html/replace-local-libs-with-cdn.js';
 import { replaceOfferLinks } from './passes/html/replace-offer-links.js';
 import { stripEventAttrs } from './passes/html/strip-event-attrs.js';
+import { injectCsp } from './passes/html/inject-csp.js';
+import { removeInlineExfilPass } from './passes/html/remove-inline-exfil-pass.js';
 
-// Порядок ОБЯЗАН совпадать с порядком блоков 1..12 из оригинального cleanHtml
-// (scripts/clean-site.ts до рефакторинга). Изменение порядка = поведенческий
-// регресс. См. REFACTOR-CLEAN-SITE.md, раздел 7 (регрессионный diff).
-const BASE_HTML_PASSES: HtmlPass[] = [
-  removeTrackerScripts,      // 1: <script src>
-  removeTrackerJsonLd,       // 2a: JSON-LD ветка
-  removeInlineTrackers,      // 2b: остальные inline <script>
-  removeNoscriptTrackers,    // 3: <noscript> ДО iframe — иначе GTM noscript-iframe осиротеет
-  removeTrackerLinks,        // 4
-  removeTrackerMetas,        // 5a
-  removeMetaRefresh,         // 5b
-  removeTrackerIframes,      // 6: <iframe src> на трекеры
-  removeImgPixels,           // 7
-  removeBase,                // 8
-  removeObjectEmbed,         // 9+10
-  removeFrames,              // frame + frameset + noframes
-  replaceLocalLibsWithCdn,   // локальные библиотеки → CDN
-  replaceOfferLinks,         // 11
-  stripEventAttrs,           // 12
+/**
+ * Порядок DOM-проходов. Ключевой момент: репин библиотек (replaceLocalLibsWithCdn)
+ * идёт ДО allowlist-проходов — чтобы фиксируемая библиотека (даже с фейкового CDN)
+ * превратилась в trusted-CDN URL и прошла белый список, а не ушла в карантин.
+ */
+const BASE_DOM_PASSES: DomPass[] = [
+  removeBase,
+  replaceLocalLibsWithCdn,   // репин → trusted CDN + SRI
+  removeTrackerScripts,      // allowlist <script src>
+  removeTrackerJsonLd,
+  removeInlineTrackers,
+  removeNoscriptTrackers,
+  removeTrackerLinks,        // allowlist <link>
+  removeTrackerMetas,
+  removeMetaRefresh,
+  removeTrackerIframes,      // allowlist <iframe src>
+  removeImgPixels,           // allowlist <img src>
+  removeObjectEmbed,
+  removeFrames,
+  replaceOfferLinks,
+  stripEventAttrs,
+  injectCsp,                 // CSP-страховка — последним проходом
 ];
 
-function getHtmlPasses(runAdvanced: boolean): HtmlPass[] {
-  if (!runAdvanced) return BASE_HTML_PASSES;
-  // Advanced mode: добавляем хирургическое удаление exfil после removeInlineTrackers (позиция 3)
-  return [
-    removeTrackerScripts,
-    removeTrackerJsonLd,
-    removeInlineTrackers,
-    removeInlineExfilPass,   // 2c: AST-хирургия inline exfil (только --advanced)
-    removeNoscriptTrackers,
-    removeTrackerLinks,
-    removeTrackerMetas,
-    removeMetaRefresh,
-    removeTrackerIframes,
-    removeImgPixels,
-    removeBase,
-    removeObjectEmbed,
-    removeFrames,
-    replaceLocalLibsWithCdn,
-    replaceOfferLinks,
-    stripEventAttrs,
-  ];
+function getDomPasses(runAdvanced: boolean): DomPass[] {
+  if (!runAdvanced) return BASE_DOM_PASSES;
+  // Advanced: AST-хирургия inline exfil сразу после удаления inline-трекеров.
+  const passes = [...BASE_DOM_PASSES];
+  const idx = passes.indexOf(removeInlineTrackers);
+  passes.splice(idx >= 0 ? idx + 1 : passes.length, 0, removeInlineExfilPass);
+  return passes;
 }
 
 function applyHtmlPasses(html: string, ctx: PassContext, runAdvanced: boolean): { html: string; counts: HtmlStatsDelta } {
-  let currentHtml = html;
+  // PHP/ASP-вставки cheerio парсить нельзя — испортит серверные теги. Пропускаем + флаг.
+  if (hasServerTags(html)) {
+    ctx.log.push({
+      file: ctx.relPath,
+      type: 'SKIP_DOM',
+      description: 'Файл содержит серверные теги (<?php ?> / <% %>) — DOM-проходы пропущены, проверьте вручную.',
+    });
+    return { html, counts: {} };
+  }
+
+  const $ = parseHtml(html);
   const totalCounts: HtmlStatsDelta = {};
 
-  for (const pass of getHtmlPasses(runAdvanced)) {
-    const result = pass(currentHtml, ctx);
-    currentHtml = result.html;
-    for (const [key, value] of Object.entries(result.counts)) {
+  for (const pass of getDomPasses(runAdvanced)) {
+    const counts = pass($, ctx);
+    for (const [key, value] of Object.entries(counts)) {
       if (value !== undefined) {
         totalCounts[key as keyof HtmlStatsDelta] = (totalCounts[key as keyof HtmlStatsDelta] ?? 0) + value;
       }
     }
   }
 
+  let currentHtml = serializeHtml($);
   // Финальная косметика — collapse тройных пустых строк
   currentHtml = currentHtml.replace(/\n[ \t]*\n[ \t]*\n+/g, '\n\n');
 
@@ -141,6 +144,8 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     metricFilesRemoved: 0,
     detectorWarnings: 0,
     obfuscatedFilesRemoved: 0,
+    quarantinedItems: 0,
+    cspInjected: 0,
     phpBackdoorWarning: false,
   };
 
@@ -149,6 +154,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
   stats.normalize = await normalizeLandingStructure(siteDir);
 
   const changelog: ChangelogEntry[] = [];
+  const quarantine: QuarantineItem[] = [];
   const mainHost = extractMainHostFromDir(siteDir);
   const metricFilesToDelete = new Set<string>();
   const obfuscatedFilesToDelete = new Set<string>();
@@ -188,6 +194,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
         filePath: file,
         relPath,
         log: changelog,
+        quarantine,
         cdnReplacements,
         unversionedLibReplacements,
       };
@@ -236,6 +243,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
       stats.eventAttrsRemoved += counts.eventAttrsRemoved ?? 0;
       stats.offerLinksReplaced += counts.offerLinksReplaced ?? 0;
       stats.inlineExfilRemoved += counts.inlineExfilRemoved ?? 0;
+      stats.cspInjected += counts.cspInjected ?? 0;
       continue;
     }
 
@@ -302,7 +310,6 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
     stats.obfuscatedFilesRemoved += obfuscatedFilesToDelete.size;
 
-    // Удаляем <script src="..."> из HTML, ссылающиеся на удалённые файлы
     for await (const htmlFile of walkFiles(siteDir)) {
       const ext = extname(htmlFile).toLowerCase();
       if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
@@ -331,7 +338,6 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
     stats.unversionedLibsCdn += unversionedLibFilesToDelete.size;
 
-    // Удаляем <script src="..."> из HTML, ссылающиеся на удалённые файлы
     for await (const htmlFile of walkFiles(siteDir)) {
       const ext = extname(htmlFile).toLowerCase();
       if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
@@ -384,7 +390,6 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
       deadFilesToDelete.add(absPath);
     }
 
-    // Удаляем <script src="..."> из HTML, ссылающиеся на удалённые dead-файлы
     if (deadFilesToDelete.size > 0) {
       for await (const htmlFile of walkFiles(siteDir)) {
         const ext = extname(htmlFile).toLowerCase();
@@ -404,8 +409,13 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
   }
 
-  // Пишем лог изменений
+  // Сбрасываем карантин на диск (после всех обходов файлов)
+  await writeQuarantine(siteDir, quarantine);
+  stats.quarantinedItems = quarantine.length;
+
+  // Пишем лог изменений + человекочитаемый отчёт
   await writeChangelog(siteDir, changelog);
+  await writeCleanReport(siteDir, stats, changelog, quarantine);
 
   return stats;
 }

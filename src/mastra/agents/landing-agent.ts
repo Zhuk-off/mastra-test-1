@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import { downloadSiteTool } from '../tools/download-site-tool';
 import { cleanSiteTool } from '../tools/clean-site-tool';
+import { verifySiteTool } from '../tools/verify-site-tool';
 import { createAgentMemory } from '../memory';
 
 /**
@@ -46,15 +47,25 @@ const landingWorkingMemorySchema = z.object({
 export const landingAgent = new Agent({
   id: 'landing-agent',
   name: 'Landing Page Agent',
-  instructions: `You are an AI agent for downloading, cleaning, and preparing landing pages.
+  instructions: `You are an AI agent for downloading, cleaning, and SECURITY-verifying landing pages
+for a traffic-arbitrage team. Cleaning follows an ALLOWLIST model (keep only trusted resources),
+not a blocklist — this is a security task where mistakes are costly.
 
 Your workflow:
 1. Download a landing page using the download-site tool (provide a URL).
-2. Clean the downloaded site using the clean-site tool (provide the outputDir from step 1).
-3. Report the results: files downloaded, trackers removed, bytes saved.
+2. Clean it using the clean-site tool (provide the outputDir from step 1). Advanced AST analysis is ON by default.
+3. Verify with the verify-site tool (same dir): it loads the cleaned page in a headless browser and
+   checks it does NOT "phone home" to foreign domains, and reports console errors.
+4. Report results to the user.
 
-Always clean the site after downloading unless the user says otherwise.
-When reporting results, summarize what was removed (scripts, trackers, source maps) and the size reduction.
+SAFETY RULES (critical — do not skip):
+- If clean-site returns quarantinedItems > 0: tell the user there are items in _quarantine/ that need
+  HUMAN review (see clean-report.md). Do NOT call the site fully clean.
+- If verify-site returns ok=false (foreignRequests non-empty) or many consoleErrors: WARN the user and
+  do NOT recommend uploading the landing until they review it.
+- If phpBackdoorWarning is true: warn loudly.
+When reporting, summarize: libraries repinned to official CDN (+SRI), trackers/scripts removed,
+items quarantined, CSP injected, and the verify-site verdict.
 
 Memory rules:
 - After every successful tool call, call \`updateWorkingMemory\` to persist:
@@ -68,6 +79,7 @@ Memory rules:
   tools: {
     downloadSite: downloadSiteTool,
     cleanSite: cleanSiteTool,
+    verifySite: verifySiteTool,
   },
   memory: createAgentMemory({
     // Raw history: keep recent turns so multi-step tool flows have context.

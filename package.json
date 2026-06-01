@@ -31,6 +31,7 @@
     "@mastra/observability": "^1.11.1",
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
+    "cheerio": "^1.2.0",
     "magic-string": "^0.30.21",
     "pixelmatch": "^7.2.0",
     "pngjs": "^7.0.0",

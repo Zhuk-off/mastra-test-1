@@ -1,51 +1,36 @@
-import type { HtmlPass } from '../../types.js';
+import type { DomPass } from '../../types.js';
+import type { CdnReplacement } from '../../types.js';
+import { logChange } from '../../utils/quarantine.js';
 
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+/**
+ * Репин библиотек на официальный CDN + SRI. Карты замен (по исходному URL)
+ * приходят в ctx из cdn-detector (локальные и абсолютные URL). Работает ПЕРЕД
+ * allowlist-проходами: фиксируемая либа становится trusted-CDN и проходит белый список.
+ */
+export const replaceLocalLibsWithCdn: DomPass = ($, ctx) => {
+  const reps = new Map<string, CdnReplacement>([
+    ...(ctx.cdnReplacements ?? []),
+    ...(ctx.unversionedLibReplacements ?? []),
+  ]);
+  if (reps.size === 0) return {};
 
-function applyReplacements(
-  html: string,
-  replacements: Map<string, { cdnUrl: string; integrity: string }>,
-  counter: { value: number },
-): string {
-  for (const [originalUrl, replacement] of replacements) {
-    const esc = escapeRegex(originalUrl);
-    const integrity = ` integrity="${replacement.integrity}" crossorigin="anonymous"`;
+  let localLibsReplaced = 0;
 
-    // <script ... src="..." ...>
-    const scriptRe = new RegExp(
-      `(<script\\b[^>]*?)(\\bsrc\\s*=\\s*['"])${esc}(['"])`,
-      'gi',
-    );
-    const beforeScript = html;
-    html = html.replace(scriptRe, `$1$2${replacement.cdnUrl}$3${integrity}`);
-    if (html !== beforeScript) counter.value++;
+  const pin = (el: any, attr: 'src' | 'href') => {
+    const url = $(el).attr(attr) ?? '';
+    const rep = reps.get(url);
+    if (!rep) return;
+    $(el).attr(attr, rep.cdnUrl);
+    // SRI ставим только если удалось посчитать хеш официального файла (онлайн).
+    if (rep.integrity) {
+      $(el).attr('integrity', rep.integrity).attr('crossorigin', 'anonymous');
+    }
+    logChange(ctx, 'LIB_REPINNED', `${url} → ${rep.cdnUrl}`, rep.integrity || '(без SRI: офлайн)');
+    localLibsReplaced++;
+  };
 
-    // <link ... href="..." ...>
-    const linkRe = new RegExp(
-      `(<link\\b[^>]*?)(\\bhref\\s*=\\s*['"])${esc}(['"])`,
-      'gi',
-    );
-    const beforeLink = html;
-    html = html.replace(linkRe, `$1$2${replacement.cdnUrl}$3${integrity}`);
-    if (html !== beforeLink) counter.value++;
-  }
-  return html;
-}
+  $('script[src]').each((_, el) => pin(el, 'src'));
+  $('link[href]').each((_, el) => pin(el, 'href'));
 
-export const replaceLocalLibsWithCdn: HtmlPass = (html, ctx) => {
-  const counts: Partial<Record<'localLibsReplaced', number>> = {};
-  const counter = { value: 0 };
-
-  if (ctx.cdnReplacements && ctx.cdnReplacements.size > 0) {
-    html = applyReplacements(html, ctx.cdnReplacements, counter);
-  }
-
-  if (ctx.unversionedLibReplacements && ctx.unversionedLibReplacements.size > 0) {
-    html = applyReplacements(html, ctx.unversionedLibReplacements, counter);
-  }
-
-  if (counter.value > 0) counts.localLibsReplaced = counter.value;
-  return { html, counts };
+  return localLibsReplaced ? { localLibsReplaced } : {};
 };

@@ -1,27 +1,17 @@
-import type { HtmlPass } from '../../types.js';
+import type { DomPass } from '../../types.js';
 import { inlineLooksLikeTracker } from '../../utils/url.js';
 
-export const removeInlineTrackers: HtmlPass = (html, _ctx) => {
-  const counts: Partial<Record<'inlineScriptsRemoved', number>> = {};
+/** Inline <script> без src, содержащий трекерные ключевые слова (gtag, fbq, ym, ...). */
+export const removeInlineTrackers: DomPass = ($) => {
   let inlineScriptsRemoved = 0;
-
-  html = html.replace(
-    /<script\b([^>]*?)>([\s\S]*?)<\/script>/gi,
-    (whole, attrs: string, body: string) => {
-      // Пропускаем те, где есть src= — они уже обработаны
-      if (/\bsrc\s*=/i.test(attrs)) return whole;
-
-      // JSON-LD — обработан отдельным pass
-      if (/type\s*=\s*['"]application\/ld\+json['"]/i.test(attrs)) return whole;
-
-      if (inlineLooksLikeTracker(body)) {
-        inlineScriptsRemoved++;
-        return '';
-      }
-      return whole;
-    },
-  );
-
-  if (inlineScriptsRemoved > 0) counts.inlineScriptsRemoved = inlineScriptsRemoved;
-  return { html, counts };
+  $('script:not([src])').each((_, el) => {
+    const type = ($(el).attr('type') ?? '').toLowerCase();
+    if (type === 'application/ld+json') return; // отдельный pass
+    const body = $(el).text() ?? '';
+    if (inlineLooksLikeTracker(body)) {
+      $(el).remove();
+      inlineScriptsRemoved++;
+    }
+  });
+  return inlineScriptsRemoved ? { inlineScriptsRemoved } : {};
 };

@@ -6,9 +6,11 @@ import { cleanSite, createBackup } from '../cleaners/index.js';
 export const cleanSiteTool = createTool({
   id: 'clean-site',
   description:
-    'Clean a downloaded landing page directory: removes trackers (GA, GTM, FB Pixel, Yandex Metrika, Hotjar, etc.), ' +
-    'inline tracker scripts, noscripts, source maps, and external tracker directories. ' +
-    'Creates a backup copy by default. Returns detailed stats on what was removed.',
+    'Очистка скачанного лендинга по модели БЕЛОГО СПИСКА: внешние ресурсы остаются только с доверенных CDN/вашей инфраструктуры; ' +
+    'библиотеки репинятся на официальный CDN + SRI; известные трекеры удаляются; ' +
+    'сомнительные внешние ресурсы — в карантин (_quarantine/) для ревью человеком; внедряется CSP-страховка. ' +
+    'Глубокий AST-анализ JS (обфускация/exfil) включён по умолчанию. Делает бэкап. ' +
+    'ВАЖНО: если quarantinedItems > 0 или phpBackdoorWarning — покажи это пользователю и не выгружай молча.',
   inputSchema: z.object({
     siteDir: z
       .string()
@@ -20,8 +22,8 @@ export const cleanSiteTool = createTool({
     advanced: z
       .boolean()
       .optional()
-      .default(false)
-      .describe('Enable AST-based JS analysis: metric file detection, obfuscation removal, exfil extraction'),
+      .default(true)
+      .describe('AST-анализ JS (metric/obfuscation/exfil). По умолчанию ВКЛЮЧЁН. Отключать только для отладки.'),
     runCoverage: z
       .boolean()
       .optional()
@@ -43,6 +45,7 @@ export const cleanSiteTool = createTool({
     metaRefreshRemoved: z.number(),
     baseHrefRemoved: z.number(),
     objectEmbedsRemoved: z.number(),
+    framesRemoved: z.number(),
     eventAttrsRemoved: z.number(),
     svgFilesProcessed: z.number(),
     svgItemsRemoved: z.number(),
@@ -54,6 +57,7 @@ export const cleanSiteTool = createTool({
     sourceMapsDeleted: z.number(),
     sourceMapRefsStripped: z.number(),
     offerLinksReplaced: z.number(),
+    localLibsReplaced: z.number(),
     bytesBefore: z.number(),
     bytesAfter: z.number(),
     bytesReduced: z.number(),
@@ -63,9 +67,12 @@ export const cleanSiteTool = createTool({
     unversionedLibsCdn: z.number(),
     metricFilesRemoved: z.number(),
     obfuscatedFilesRemoved: z.number(),
+    quarantinedItems: z.number(),
+    cspInjected: z.number(),
     detectorWarnings: z.number(),
     phpBackdoorWarning: z.boolean(),
     changelogPath: z.string().optional(),
+    quarantineDir: z.string().optional(),
   }),
   execute: async ({ siteDir, noBackup, advanced, runCoverage }) => {
     const resolvedDir = resolve(siteDir);
@@ -76,7 +83,7 @@ export const cleanSiteTool = createTool({
     }
 
     const stats = await cleanSite(resolvedDir, {
-      runAdvanced: advanced ?? false,
+      runAdvanced: advanced ?? true,
       runCoverage: runCoverage ?? false,
     });
 
@@ -89,6 +96,7 @@ export const cleanSiteTool = createTool({
         stats.jsFilesScanned > 0 || stats.cssFilesScanned > 0
           ? join(resolvedDir, 'clean-site-changes.log')
           : undefined,
+      quarantineDir: stats.quarantinedItems > 0 ? join(resolvedDir, '_quarantine') : undefined,
     };
   },
 });

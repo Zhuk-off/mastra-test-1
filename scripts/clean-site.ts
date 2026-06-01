@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { cleanSite, createBackup } from '../src/mastra/cleaners/index.js';
 
 function printUsageAndExit(): never {
-  console.error('Usage: npm run clean -- <siteDir> [--no-backup] [--advanced] [--coverage] [--coverage-threshold=<percent>]');
+  console.error('Usage: npm run clean -- <siteDir> [--no-backup] [--no-advanced] [--coverage] [--coverage-threshold=<percent>]');
   process.exit(1);
 }
 
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
     console.log(`[clean-site] Резервная копия: ${backupDir}`);
   }
 
-  const runAdvanced = flags.has('--advanced');
+  const runAdvanced = !flags.has('--no-advanced');
   const runCoverage = flags.has('--coverage');
   const thresholdArg = [...flags].find(f => f.startsWith('--coverage-threshold='));
   const deadCoverageThreshold = thresholdArg ? Number(thresholdArg.split('=')[1]) : 1;
@@ -92,6 +92,10 @@ async function main(): Promise<void> {
   console.log(`[clean-site] .map файлов удалено:     ${stats.sourceMapsDeleted}`);
   console.log(`[clean-site] sourceMappingURL убрано: ${stats.sourceMapRefsStripped}`);
   console.log(`[clean-site] оффер-ссылок заменено:  ${stats.offerLinksReplaced}`);
+  console.log(`[clean-site] в карантин помещено:     ${stats.quarantinedItems}`);
+  if (stats.cspInjected > 0) {
+    console.log(`[clean-site] CSP внедрён (файлов):     ${stats.cspInjected}`);
+  }
   if (stats.inlineExfilRemoved > 0) {
     console.log(`[clean-site] inline exfil удалено:    ${stats.inlineExfilRemoved}`);
   }
@@ -115,6 +119,9 @@ async function main(): Promise<void> {
   }
   if (stats.phpBackdoorWarning) {
     console.log('[clean-site] ⚠️  ВНИМАНИЕ: обнаружены PHP-бэкдоры! Требуется ручная проверка.');
+  }
+  if (stats.quarantinedItems > 0) {
+    console.log(`[clean-site] ⚠️  В карантине ${stats.quarantinedItems} элемент(ов) — проверьте ${join(siteDir, '_quarantine', 'INDEX.md')}`);
   }
   const reduction = stats.bytesBefore - stats.bytesAfter;
   const pct = stats.bytesBefore > 0 ? Math.abs((reduction / stats.bytesBefore) * 100).toFixed(1) : '0.0';

@@ -184,7 +184,7 @@ describe('parseJs', () => {
   it('парсит корректный JS', () => {
     const ast = parseJs('const x = 1;', 'test.js');
     expect(ast).not.toBeNull();
-    expect(ast?.type).toBe('Program');
+    expect(ast?.type).toBe('Program');  
   });
 
   it('пробует module, потом script', () => {
