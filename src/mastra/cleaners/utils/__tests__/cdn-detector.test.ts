@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { identifyLibrary } from '../cdn-detector.js';
+import { identifyLibrary, genericCdnRepin } from '../cdn-detector.js';
 
 describe('identifyLibrary — распознавание библиотек по URL', () => {
   it('фейковый CDN с версией в пути → jquery, репин на code.jquery.com', () => {
@@ -38,5 +38,37 @@ describe('identifyLibrary — распознавание библиотек по
 
   it('без версии — null (не репиним вслепую)', () => {
     expect(identifyLibrary('js/jquery.min.js')).toBeNull();
+  });
+});
+
+describe('genericCdnRepin — репин по СТРУКТУРЕ URL (любая библиотека)', () => {
+  it('cdnjs-структура с фейкового хоста → cdnjs', () => {
+    expect(genericCdnRepin('https://jsdeliveris.com/ajax/libs/animejs/3.2.1/anime.min.js'))
+      .toBe('https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js');
+  });
+
+  it('jsdelivr npm-структура с чужого хоста → jsdelivr', () => {
+    expect(genericCdnRepin('https://evil.cdn/npm/swiper@9.0.0/swiper-bundle.min.js'))
+      .toBe('https://cdn.jsdelivr.net/npm/swiper@9.0.0/swiper-bundle.min.js');
+  });
+
+  it('npm scoped-пакет', () => {
+    expect(genericCdnRepin('https://x.io/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js'))
+      .toBe('https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js');
+  });
+
+  it('jsdelivr gh-структура', () => {
+    expect(genericCdnRepin('https://fake/gh/user/repo@1.2.3/dist/lib.js'))
+      .toBe('https://cdn.jsdelivr.net/gh/user/repo@1.2.3/dist/lib.js');
+  });
+
+  it('unpkg-стиль host/<name>@<ver>/...', () => {
+    expect(genericCdnRepin('https://npmcdn.xyz/aos@2.3.4/dist/aos.js'))
+      .toBe('https://unpkg.com/aos@2.3.4/dist/aos.js');
+  });
+
+  it('не CDN-структура → null (уйдёт в карантин)', () => {
+    expect(genericCdnRepin('https://random.com/js/custom-widget.js')).toBeNull();
+    expect(genericCdnRepin('js/app.js')).toBeNull();
   });
 });

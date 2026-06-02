@@ -5,7 +5,7 @@
  */
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CleanStats, ChangelogEntry, QuarantineItem } from '../types.js';
+import type { CleanStats, ChangelogEntry, QuarantineItem, MacroFinding } from '../types.js';
 
 function countByType(log: ChangelogEntry[], type: string): ChangelogEntry[] {
   return log.filter((e) => e.type === type);
@@ -15,6 +15,7 @@ export function renderReport(
   stats: CleanStats,
   log: ChangelogEntry[],
   quarantine: QuarantineItem[],
+  macros: MacroFinding[] = [],
 ): string {
   const L: string[] = [];
   L.push('# Отчёт очистки лендинга', '');
@@ -30,6 +31,7 @@ export function renderReport(
   L.push(`- оффер-ссылок → {offer}: **${stats.offerLinksReplaced}**`);
   L.push(`- CSP внедрён (файлов): **${stats.cspInjected}**`);
   L.push(`- JS-файлов: obfuscated удалено ${stats.obfuscatedFilesRemoved}, metric удалено ${stats.metricFilesRemoved}`);
+  L.push(`- чужих макросов на ревью: **${stats.macrosFlagged}**`);
   L.push('');
 
   // Карантин — самое важное
@@ -42,6 +44,38 @@ export function renderReport(
     L.push('');
   } else {
     L.push('## Карантин', '', '_Пусто — всё классифицировано однозначно._', '');
+  }
+
+  // Карта макросов
+  if (macros.length > 0) {
+    const links = macros.filter((m) => m.kind === 'link');
+    const images = macros.filter((m) => m.kind === 'image');
+    const texts = macros.filter((m) => m.kind === 'text');
+    const other = macros.filter((m) => m.kind === 'other');
+    const own = macros.filter((m) => m.kind === 'own');
+    L.push(`## Макросы — карта (${macros.length})`, '');
+    L.push('Этап очистки: наши макросы оставлены, чужие в ссылках → `{offer}`. Подстановку продуктового изображения/названия делает этап адаптации (Adult/WeightLoss).', '');
+    if (links.length) {
+      L.push('**Ссылки → `{offer}`:**');
+      for (const m of links) L.push(`- \`${m.file}\` <${m.element}> — было: ${m.token}`);
+      L.push('');
+    }
+    if (images.length) {
+      L.push('**Изображения — подставить продуктовый макрос на этапе адаптации:**');
+      for (const m of images) L.push(`- \`${m.file}\` <${m.element} ${m.attr}> — ${m.token}`);
+      L.push('');
+    }
+    if (texts.length) {
+      L.push('**Текстовые макросы трекера (удалены):**');
+      for (const m of texts) L.push(`- \`${m.file}\` — ${m.token}`);
+      L.push('');
+    }
+    if (other.length) {
+      L.push('**Прочие чужие макросы — проверить вручную:**');
+      for (const m of other) L.push(`- \`${m.file}\` <${m.element} ${m.attr}> — ${m.token}`);
+      L.push('');
+    }
+    if (own.length) L.push(`**Наши макросы (оставлены без изменений): ${own.length}**`, '');
   }
 
   // Репин
@@ -75,8 +109,9 @@ export async function writeCleanReport(
   stats: CleanStats,
   log: ChangelogEntry[],
   quarantine: QuarantineItem[],
+  macros: MacroFinding[] = [],
 ): Promise<string> {
   const path = join(siteDir, 'clean-report.md');
-  await writeFile(path, renderReport(stats, log, quarantine), 'utf8');
+  await writeFile(path, renderReport(stats, log, quarantine, macros), 'utf8');
   return path;
 }

@@ -68,6 +68,7 @@ export const cleanSiteTool = createTool({
     metricFilesRemoved: z.number(),
     obfuscatedFilesRemoved: z.number(),
     quarantinedItems: z.number(),
+    macrosFlagged: z.number(),
     cspInjected: z.number(),
     detectorWarnings: z.number(),
     phpBackdoorWarning: z.boolean(),

@@ -64,3 +64,41 @@ export const POLICY = {
   /** Узнаваемые библиотеки репинить на официальный CDN + SRI. */
   repinLibraries: true,
 } as const;
+
+// ─────────────────────────────────────────────────────────────────────────
+// МАКРОСЫ
+// На этапе ОЧИСТКИ: наши макросы сохраняем, чужие — нормализуем/выносим в отчёт.
+// Подстановку значений (offername/offerimage по вертикали) делает этап АДАПТАЦИИ.
+// См. docs/macro-and-localization-policy.md
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Наши макросы — трекер подставит значения. Всё остальное в {...} — чужое.
+ *
+ * Раньше здесь была регулярка `/^\{_offer_value:[^}]*\}$/i`, которая ловила
+ * ЛЮБОЕ `{_offer_value:...}`. Мы убрали её, чтобы контролировать точный
+ * список макросов вручную и не пропускать неожиданные токены от трекера.
+ *
+ * Если трекер добавит новые поля (например `{_offer_value:offerdesc}`) и
+ * вы захотите вернуть автоматический захват всего семейства — замените
+ * `isOwnMacro` на:
+ *   return OWN_MACROS.has(token) || /^\{_offer_value:[^}]*\}$/i.test(token);
+ */
+export const OWN_MACROS = new Set<string>(['{offer}', '{_offer_value:offername}', '{_offer_value:offerimage}']);
+
+/** Проверка: токен — наш макрос? */
+export function isOwnMacro(token: string): boolean {
+  return OWN_MACROS.has(token);
+}
+
+/**
+ * Этап АДАПТАЦИИ (не очистки): базовый URL продуктового изображения по вертикали.
+ * Вертикаль (Adult/WeightLoss) берётся из задачи/контекста.
+ */
+export const PRODUCT_IMAGE_BASE: Record<'Adult' | 'WeightLoss', string> = {
+  Adult: 'https://d4tncaiqdi48w.cloudfront.net/Aquarium/Images/Adult/ProductImages/{_offer_value:offerimage}',
+  WeightLoss: 'https://d4tncaiqdi48w.cloudfront.net/Aquarium/Images/WeightLoss/ProductImages/{_offer_value:offerimage}',
+};
+
+/** Этап адаптации: макрос названия товара. */
+export const PRODUCT_NAME_MACRO = '{_offer_value:offername}';

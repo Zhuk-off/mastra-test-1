@@ -69,6 +69,8 @@ export interface CleanStats {
   obfuscatedFilesRemoved: number;
   /** Узлы/файлы, помещённые в карантин (требуют ревью человеком) */
   quarantinedItems: number;
+  /** Чужие макросы, требующие ручного решения (image/other) */
+  macrosFlagged: number;
   /** CSP-политика внедрена в HTML */
   cspInjected: number;
   /** true если найдены PHP-бэкдоры (require manual inspection) */
@@ -100,6 +102,16 @@ export interface QuarantineItem {
   file: string;
 }
 
+/** Найденный макрос (для карты макросов в отчёте). */
+export interface MacroFinding {
+  kind: 'own' | 'link' | 'image' | 'text' | 'other';
+  token: string;
+  file: string;
+  element: string;
+  attr: string;
+  action: string;
+}
+
 export interface PassContext {
   siteDir: string;
   mainHost: string;
@@ -110,6 +122,8 @@ export interface PassContext {
   unversionedLibReplacements?: Map<string, CdnReplacement>;
   /** Накопитель карантина (заполняется проходами, сбрасывается на диск в pipeline). */
   quarantine?: QuarantineItem[];
+  /** Карта найденных макросов (для отчёта). */
+  macros?: MacroFinding[];
 }
 
 // Поля CleanStats, относящиеся к HTML-проходам.

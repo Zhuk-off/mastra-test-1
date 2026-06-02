@@ -1,6 +1,6 @@
 import { readFile, writeFile, cp, unlink, rm } from 'node:fs/promises';
 import { extname, relative, basename, dirname, resolve, join } from 'node:path';
-import type { CleanStats, DomPass, PassContext, HtmlStatsDelta, ChangelogEntry, CleanSiteOptions, QuarantineItem } from './types.js';
+import type { CleanStats, DomPass, PassContext, HtmlStatsDelta, ChangelogEntry, CleanSiteOptions, QuarantineItem, MacroFinding } from './types.js';
 import { extractMainHostFromDir } from './utils/offer-detector.js';
 import { walkFiles } from './utils/walk.js';
 import { writeChangelog } from './utils/changelog.js';
@@ -35,6 +35,7 @@ import { removeImgPixels } from './passes/html/remove-img-pixels.js';
 import { removeObjectEmbed } from './passes/html/remove-object-embed.js';
 import { removeFrames } from './passes/html/remove-frames.js';
 import { replaceOfferLinks } from './passes/html/replace-offer-links.js';
+import { detectMacros } from './passes/html/detect-macros.js';
 import { stripEventAttrs } from './passes/html/strip-event-attrs.js';
 import { injectCsp } from './passes/html/inject-csp.js';
 import { removeInlineExfilPass } from './passes/html/remove-inline-exfil-pass.js';
@@ -59,6 +60,7 @@ const BASE_DOM_PASSES: DomPass[] = [
   removeObjectEmbed,
   removeFrames,
   replaceOfferLinks,
+  detectMacros,              // макросы: наши — оставить, чужие — нормализовать/в отчёт
   stripEventAttrs,
   injectCsp,                 // CSP-страховка — последним проходом
 ];
@@ -145,6 +147,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     detectorWarnings: 0,
     obfuscatedFilesRemoved: 0,
     quarantinedItems: 0,
+    macrosFlagged: 0,
     cspInjected: 0,
     phpBackdoorWarning: false,
   };
@@ -155,6 +158,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
 
   const changelog: ChangelogEntry[] = [];
   const quarantine: QuarantineItem[] = [];
+  const macros: MacroFinding[] = [];
   const mainHost = extractMainHostFromDir(siteDir);
   const metricFilesToDelete = new Set<string>();
   const obfuscatedFilesToDelete = new Set<string>();
@@ -195,6 +199,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
         relPath,
         log: changelog,
         quarantine,
+        macros,
         cdnReplacements,
         unversionedLibReplacements,
       };
@@ -412,10 +417,11 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
   // Сбрасываем карантин на диск (после всех обходов файлов)
   await writeQuarantine(siteDir, quarantine);
   stats.quarantinedItems = quarantine.length;
+  stats.macrosFlagged = macros.filter((m) => m.kind === 'image' || m.kind === 'other').length;
 
   // Пишем лог изменений + человекочитаемый отчёт
   await writeChangelog(siteDir, changelog);
-  await writeCleanReport(siteDir, stats, changelog, quarantine);
+  await writeCleanReport(siteDir, stats, changelog, quarantine, macros);
 
   return stats;
 }
