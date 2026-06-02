@@ -104,7 +104,7 @@ export interface QuarantineItem {
 
 /** Найденный макрос (для карты макросов в отчёте). */
 export interface MacroFinding {
-  kind: 'own' | 'link' | 'image' | 'text' | 'other';
+  kind: 'own' | 'link' | 'image' | 'text' | 'script' | 'other';
   token: string;
   file: string;
   element: string;

@@ -69,4 +69,35 @@ describe('detectMacros', () => {
     const out = run('<body>{offer}</body>', ctx);
     expect(out).toContain('{offer}');
   });
+
+  it('макрос в <script> (подмена ссылки) → флаг script, JS не редактируем', () => {
+    const ctx = makeCtx();
+    const out = run('<script>document.querySelector("a").href = "https://trk/r?fbclid={_fbclid}";</script>', ctx);
+    expect(ctx.macros.some((m) => m.kind === 'script')).toBe(true);
+    expect(out).toContain('{_fbclid}'); // JS не тронут
+  });
+
+  it('JS object literal {a:1} НЕ считается макросом', () => {
+    const ctx = makeCtx();
+    run('<script>const o = {a:1, b:2}; const t = `${o.a}`;</script>', ctx);
+    expect(ctx.macros.length).toBe(0);
+  });
+
+  it('макрос в <style> url() → флаг image', () => {
+    const ctx = makeCtx();
+    run('<style>.bg{background:url({product_bg})}</style>', ctx);
+    expect(ctx.macros.some((m) => m.kind === 'image')).toBe(true);
+  });
+
+  it('CSS rule block {color:red} НЕ считается макросом', () => {
+    const ctx = makeCtx();
+    run('<style>.a{color:red;font-size:12px}</style>', ctx);
+    expect(ctx.macros.length).toBe(0);
+  });
+
+  it('макрос в style="" url() → флаг image', () => {
+    const ctx = makeCtx();
+    run('<div style="background:url({bgimg})"></div>', ctx);
+    expect(ctx.macros.some((m) => m.kind === 'image')).toBe(true);
+  });
 });

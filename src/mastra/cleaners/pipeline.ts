@@ -417,7 +417,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
   // Сбрасываем карантин на диск (после всех обходов файлов)
   await writeQuarantine(siteDir, quarantine);
   stats.quarantinedItems = quarantine.length;
-  stats.macrosFlagged = macros.filter((m) => m.kind === 'image' || m.kind === 'other').length;
+  stats.macrosFlagged = macros.filter((m) => m.kind === 'image' || m.kind === 'other' || m.kind === 'script').length;
 
   // Пишем лог изменений + человекочитаемый отчёт
   await writeChangelog(siteDir, changelog);

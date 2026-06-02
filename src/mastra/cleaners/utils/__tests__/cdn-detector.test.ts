@@ -62,9 +62,17 @@ describe('genericCdnRepin — репин по СТРУКТУРЕ URL (любая
       .toBe('https://cdn.jsdelivr.net/gh/user/repo@1.2.3/dist/lib.js');
   });
 
-  it('unpkg-стиль host/<name>@<ver>/...', () => {
-    expect(genericCdnRepin('https://npmcdn.xyz/aos@2.3.4/dist/aos.js'))
-      .toBe('https://unpkg.com/aos@2.3.4/dist/aos.js');
+  it('SECURITY: bare host/<name>@<ver> НЕ репинится (защита от dependency-confusion)', () => {
+    expect(genericCdnRepin('https://company.com/internal-pkg@1.0.0/main.js')).toBeNull();
+    expect(genericCdnRepin('https://npmcdn.xyz/aos@2.3.4/dist/aos.js')).toBeNull();
+  });
+
+  it('SECURITY: структура в query-строке НЕ срабатывает (матчим только pathname)', () => {
+    expect(genericCdnRepin('https://evil.com/api?callback=/ajax/libs/jquery/3.6.0/jquery.min.js')).toBeNull();
+  });
+
+  it('SECURITY: структура НЕ в начале пути НЕ срабатывает', () => {
+    expect(genericCdnRepin('https://evil.com/wrap/ajax/libs/jquery/3.6.1/jquery.js')).toBeNull();
   });
 
   it('не CDN-структура → null (уйдёт в карантин)', () => {

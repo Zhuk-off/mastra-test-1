@@ -51,6 +51,7 @@ export function renderReport(
     const links = macros.filter((m) => m.kind === 'link');
     const images = macros.filter((m) => m.kind === 'image');
     const texts = macros.filter((m) => m.kind === 'text');
+    const scripts = macros.filter((m) => m.kind === 'script');
     const other = macros.filter((m) => m.kind === 'other');
     const own = macros.filter((m) => m.kind === 'own');
     L.push(`## Макросы — карта (${macros.length})`, '');
@@ -68,6 +69,11 @@ export function renderReport(
     if (texts.length) {
       L.push('**Текстовые макросы трекера (удалены):**');
       for (const m of texts) L.push(`- \`${m.file}\` — ${m.token}`);
+      L.push('');
+    }
+    if (scripts.length) {
+      L.push('**Макросы в JS (проверить — возможна подмена ссылок):**');
+      for (const m of scripts) L.push(`- \`${m.file}\` <script> — ${m.token}`);
       L.push('');
     }
     if (other.length) {
