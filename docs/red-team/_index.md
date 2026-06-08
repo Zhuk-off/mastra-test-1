@@ -72,8 +72,8 @@
 
 | ID | Файл | Sev | Угол | Суть | Статус |
 |----|------|-----|------|------|--------|
-| AL-1 | allowlist.ts | 🟥 | Bypass | `data:`/`blob:`/`javascript:` в script/iframe → `keep` | 🆕 |
-| AL-2 | allowlist.ts | 🟧 | Bypass | Ведущие/внутренние пробел/таб/перевод строки обходят `isAbsoluteUrl` | 🆕 |
+| AL-1 | allowlist.ts | 🟥 | Bypass | `data:`/`blob:`/`javascript:` в script/iframe → `keep` | ✅ |
+| AL-2 | allowlist.ts | 🟧 | Bypass | Ведущие/внутренние пробел/таб/перевод строки обходят `isAbsoluteUrl` | ✅ |
 | AL-3 | allowlist.ts | 🟧 | Bypass | Мультитенантные CDN (jsdelivr `/gh/`, unpkg) доверены пословно | 🆕 |
 | AL-4 | allowlist.ts | 🟨 | Soundness | Плоский trust-set: font/CSS-хост доверен и для `script` | 🆕 |
 | URL-1 | url.ts | 🟧 | Bypass | `extractHostname` для относительного URL возвращает `example.com` | 🆕 |
@@ -113,8 +113,8 @@
 | RLL-1 | replace-local-libs…ts | 🟨 | Robustness | Ключ карты — сырой regex-URL, матч по cheerio → промах репина | 🆕 |
 | RLL-2 | replace-local-libs…ts | 🟩 | Low | Ветка «без SRI: офлайн» фактически мёртвая | 🆕 |
 | RLL-3 | replace-local-libs…ts | 🟨 | Архитектура | Полное доверие карте до allowlist — материализует CDN-1 | 🆕 |
-| 2A-1 | remove-tracker-{scripts,iframes},img-pixels | 🟧 | Bypass | URL не нормализуется → whitespace-обход (AL-2, подтверждён) | 🆕 |
-| 2A-2 | remove-tracker-{scripts,iframes} | 🟧 | Bypass | `data:`/`javascript:` в src → keep (AL-1, в 2a не ловится) | 🆕 |
+| 2A-1 | remove-tracker-{scripts,iframes},img-pixels | 🟧 | Bypass | URL не нормализуется → whitespace-обход (AL-2, подтверждён) | ✅ |
+| 2A-2 | remove-tracker-{scripts,iframes} | 🟧 | Bypass | `data:`/`javascript:` в src → keep (AL-1, в 2a не ловится) | ✅ |
 | 2A-3 | remove-tracker-links | 🟨 | Bypass | preconnect/preload — блок-лист; modulepreload/мульти-rel мимо | 🆕 |
 | 2A-4 | remove-noscript-trackers | 🟨 | Bypass | `<noscript>` allowlist-слеп: блок-лист → неизвестное выживает | 🆕 |
 | 2A-5 | remove-inline-trackers | 🟨 | Soundness | Только вендор-сниппеты; кастомный inline-exfil не здесь (→2d) | 🆕 |
@@ -132,11 +132,12 @@
 | OFFER-1 | offer-detector | 🟨 | Robustness | Любая внешняя не-trusted ссылка → `{offer}` (соцсети/правовые ломаются) | 🆕 |
 | OFFER-2 | offer-detector | 🟨 | Soundness | Нераспознанный same-host оффер сохраняет ЧУЖОЙ URL | 🆕 |
 | OFFER-3 | offer-detector | 🟩 | Soundness | Декод только `&amp;`; относительные офферы не ловятся | 🆕 |
-| 2D-1 | allowlist.ts (сквозь) | 🟧 | Bypass | `data:`/`javascript:`/`blob:` в src/href не ловит НИКТО (T-3) | 🆕 |
+| 2D-1 | allowlist.ts (сквозь) | 🟧 | Bypass | `data:`/`javascript:`/`blob:` в src/href не ловит НИКТО (T-3) | ✅ |
 | 2D-2 | strip-event-attrs | 🟨 | Bypass | `on*` снимается только при литеральном url/keyword; обфускация мимо | 🆕 |
 | 2D-3 | event-attrs.ts | 🟨 | Bypass | Реестр `on*` неполон — нет touch/pointer/wheel (mobile) | 🆕 |
 | 2D-4 | inject-csp | 🟩 | Robustness | Размещение ок (T-4); но SKIP_DOM-файлы без CSP (← PIPE-1) | 🆕 |
 | 2D-5 | remove-inline-exfil-pass | 🟨 | Граница | Непарсимый inline-script молча пропущен; detect — Тир 3 | 🆕 |
+| 2D-6 | replace-offer-links / new pass | 🟧 | Bypass | `<a href="javascript:/data:">` не проходит `classifyResource` → выживает (остаток C1: классификатор готов, проход не подключён) | 🆕 |
 | CJS-1 | clean-js | 🟧 | Correctness | Устаревший AST: docWrite режет по смещённым позициям после extract | 🆕 |
 | CJS-2 | clean-js | 🟨 | Robustness | `detectObfuscation` удаляет весь файл (без карантина) — FP на минифик. либе | 🆕 |
 | CJS-3 | clean-js | 🟨 | Robustness | Парс не удался → все AST-детекторы молча пропущены | 🆕 |

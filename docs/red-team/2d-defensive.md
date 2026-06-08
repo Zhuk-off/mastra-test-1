@@ -96,3 +96,17 @@
 2. **2D-2 + 2D-3** — `on*`-обработчики: и логика (только литеральный url), и реестр (нет touch/pointer)
    дырявы; обфусцированный exfil в обработчике не ловит никто.
 3. **2D-4** — закрыть PIPE-1, иначе CSP-бэкстоп отсутствует на серверных файлах.
+
+---
+
+## ✅ Статус фиксов (C1)
+
+- **2D-1 ✅ (на уровне классификатора + src-контексты)** — `classifyResource` теперь возвращает
+  `quarantine` для `data:`/`blob:`/`javascript:`/`vbscript:`/`filesystem:` в script/iframe/media/
+  stylesheet и `remove` для `javascript:`/`vbscript:` в `anchor`(href). Для **src** это уже работает
+  end-to-end (проходы 2a зовут `classifyResource`).
+- **⚠️ Остаток → 2D-6 (🆕):** `<a href="javascript:/data:">` пока **не** проходит классификатор —
+  `replace-offer-links` зовёт только `looksLikeOfferUrl`, а не `classifyResource('anchor', …)`.
+  Политика в `allowlist.ts` готова и покрыта тестом (`anchor` → remove), но НУЖНА проводка прохода по
+  `<a href>` (вне scope C1 = только allowlist.ts). Заведено как **2D-6** в реестре.
+- **2D-2 / 2D-3 / 2D-5** — НЕ трогали (это C4/харднинг по `on*`); остаются 🆕.

