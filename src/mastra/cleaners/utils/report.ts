@@ -59,6 +59,21 @@ export function renderReport(
     L.push('');
   }
 
+  // Удалённые ЦЕЛИКОМ файлы (по эвристике) — самые FP-склонные и необратимые
+  // действия. Раньше отчёт показывал только счётчики в «Итог», но не КАКИЕ файлы (REP-1).
+  const deletionTypes = ['OBFUSCATED_JS', 'METRIC_FILE', 'DEAD_JS_FILE'];
+  const deletions = log.filter((e) => deletionTypes.includes(e.type));
+  if (deletions.length > 0) {
+    L.push(`## 🗑 Удалённые файлы — ${deletions.length} шт. (необратимо, ПРОВЕРЬТЕ на ложные срабатывания)`, '');
+    L.push(
+      'Файлы удалены целиком по эвристике (обфускация / metric-сигнатура / 0% coverage). ' +
+        'Если удалено ошибочно — восстановите из `_backup`.',
+      '',
+    );
+    for (const d of deletions) L.push(`- **${d.type}** \`${d.file}\` — ${d.description}`);
+    L.push('');
+  }
+
   // Карта макросов
   if (macros.length > 0) {
     const links = macros.filter((m) => m.kind === 'link');
@@ -106,7 +121,7 @@ export function renderReport(
   }
 
   // Предупреждения детекторов (advanced): redirect/keylogger/php
-  const warnTypes = ['REDIRECT_WARN', 'KEYLOGGER_WARN', 'PHP_BACKDOOR', 'JS предупреждение'];
+  const warnTypes = ['REDIRECT_WARN', 'KEYLOGGER_WARN', 'PHP_BACKDOOR_WARN', 'JS предупреждение'];
   const warnings = log.filter((e) => warnTypes.includes(e.type));
   if (warnings.length > 0) {
     L.push(`## ⚠️ Предупреждения — ${warnings.length} шт. (проверьте)`, '');

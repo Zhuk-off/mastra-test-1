@@ -55,4 +55,29 @@ describe('renderReport', () => {
     expect(md).toContain('inc/header.php');
     expect(md).toContain('РУЧНАЯ ПРОВЕРКА');
   });
+
+  it('REP-1: PHP-бэкдор (тип PHP_BACKDOOR_WARN) попадает в раздел предупреждений', () => {
+    const log: ChangelogEntry[] = [
+      { file: 'shell.php', type: 'PHP_BACKDOOR_WARN', description: 'eval($_POST[...])', lineNumber: 3 },
+    ];
+    const md = renderReport(baseStats({ phpBackdoorWarning: true, phpFilesProcessed: 1 }), log, []);
+    // Раньше фильтр искал 'PHP_BACKDOOR' (без _WARN) → детали терялись.
+    expect(md).toContain('PHP_BACKDOOR_WARN');
+    expect(md).toContain('shell.php');
+    expect(md).toContain('eval($_POST[...])');
+  });
+
+  it('REP-1: удалённые целиком файлы перечислены с путями (не только счётчик)', () => {
+    const log: ChangelogEntry[] = [
+      { file: 'js/metric.js', type: 'METRIC_FILE', description: 'metric-сигнатура' },
+      { file: 'js/packed.js', type: 'OBFUSCATED_JS', description: 'обфускация (_0x / packer)' },
+      { file: 'js/unused.js', type: 'DEAD_JS_FILE', description: '0% coverage' },
+    ];
+    const md = renderReport(baseStats({ metricFilesRemoved: 1, obfuscatedFilesRemoved: 1, deadJsFilesRemoved: 1 }), log, []);
+    expect(md).toContain('Удалённые файлы');
+    expect(md).toContain('js/metric.js');
+    expect(md).toContain('js/packed.js');
+    expect(md).toContain('js/unused.js');
+    expect(md).toContain('_backup');
+  });
 });
