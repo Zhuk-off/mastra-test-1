@@ -46,6 +46,19 @@ export function renderReport(
     L.push('## Карантин', '', '_Пусто — всё классифицировано однозначно._', '');
   }
 
+  // Серверные файлы, которым DOM-очистка НЕ применялась — НЕ «тихий» пропуск.
+  const skipped = countByType(log, 'SKIP_DOM');
+  if (skipped.length > 0) {
+    L.push(`## 🚨 Серверные файлы НЕ очищены — ${skipped.length} шт. (РУЧНАЯ ПРОВЕРКА)`, '');
+    L.push(
+      'Файлы содержат `<?php ?>` / `<% %>` — DOM-проходы (удаление трекеров/exfil, инъекция CSP) к ним **не применялись**. ' +
+        'Уберите серверный код и прогоните очистку снова, либо проверьте и почистите вручную.',
+      '',
+    );
+    for (const s of skipped) L.push(`- \`${s.file}\``);
+    L.push('');
+  }
+
   // Карта макросов
   if (macros.length > 0) {
     const links = macros.filter((m) => m.kind === 'link');
@@ -93,7 +106,7 @@ export function renderReport(
   }
 
   // Предупреждения детекторов (advanced): redirect/keylogger/php
-  const warnTypes = ['REDIRECT_WARN', 'KEYLOGGER_WARN', 'PHP_BACKDOOR', 'JS предупреждение', 'SKIP_DOM'];
+  const warnTypes = ['REDIRECT_WARN', 'KEYLOGGER_WARN', 'PHP_BACKDOOR', 'JS предупреждение'];
   const warnings = log.filter((e) => warnTypes.includes(e.type));
   if (warnings.length > 0) {
     L.push(`## ⚠️ Предупреждения — ${warnings.length} шт. (проверьте)`, '');

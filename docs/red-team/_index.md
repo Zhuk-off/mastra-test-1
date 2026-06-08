@@ -84,11 +84,11 @@
 | POL-2 | policy.ts | 🟨 | Bypass | CSP доверяет мультитенантным CDN (jsdelivr/tailwind) | 🆕 |
 | POL-3 | policy.ts | 🟨 | Robustness | Хосты/макросы захардкожены под одного владельца | 🆕 |
 | POL-4 | policy.ts | 🟩 | Soundness | `isOwnMacro` регистрозависим (`{OFFER}` → чужой) | 🆕 |
-| DOM-1 | html-dom.ts | 🟥 | Bypass/Robust | `hasServerTags` FP (`<%`, текст `<? `) → ВСЯ очистка пропущена | 🆕 |
+| DOM-1 | html-dom.ts | 🟥 | Bypass/Robust | `hasServerTags` FP (`<%`, текст `<? `) → ВСЯ очистка пропущена | ✅ |
 | DOM-2 | html-dom.ts | 🟨 | Robustness | cheerio фабрикует `html/head/body`, переписывает структуру | 🆕 |
 | DOM-3 | html-dom.ts | 🟨 | Soundness | `<noscript>` = текст, DOM-селекторы не видят трекеры внутри | 🆕 |
 | DOM-4 | html-dom.ts | 🟨 | Robustness | `</script>` в строке ломает round-trip | 🆕 |
-| PIPE-1 | pipeline.ts | 🟥 | Bypass | Серверный тег → `applyHtmlPasses` тихо возвращает HTML как есть | 🆕 |
+| PIPE-1 | pipeline.ts | 🟥 | Bypass | Серверный тег → `applyHtmlPasses` тихо возвращает HTML как есть | ✅ |
 | PIPE-2 | pipeline.ts | 🟧 | Bypass/Robust | Удаление `<script src>` регэкспом мимо DOM (query/`../`/self-close промахи) | 🆕 |
 | PIPE-3 | pipeline.ts | 🟨 | Robustness | Нет try/catch по файлу — один кривой файл роняет весь прогон | 🆕 |
 | PIPE-4 | pipeline.ts | 🟨 | Bypass | Пост-обработка правит даже SKIP_DOM-нутые серверные файлы | 🆕 |

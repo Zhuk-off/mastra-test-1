@@ -12,7 +12,8 @@ function baseStats(over: Partial<CleanStats> = {}): CleanStats {
     externalDirsRemoved: 0, sourceMapsDeleted: 0, sourceMapRefsStripped: 0, offerLinksReplaced: 0,
     bytesBefore: 0, bytesAfter: 0, deadJsFilesRemoved: 0, partialJsCleaned: 0, inlineExfilRemoved: 0,
     unversionedLibsCdn: 0, metricFilesRemoved: 0, detectorWarnings: 0, obfuscatedFilesRemoved: 0,
-    quarantinedItems: 0, macrosFlagged: 0, cspInjected: 0, phpBackdoorWarning: false, ...over,
+    quarantinedItems: 0, macrosFlagged: 0, cspInjected: 0, phpBackdoorWarning: false,
+    serverTagsFilesSkipped: 0, ...over,
   };
 }
 
@@ -41,5 +42,17 @@ describe('renderReport', () => {
     expect(md).toContain('Репин библиотек');
     expect(md).toContain('code.jquery.com');
     expect(md).toContain('REDIRECT_WARN');
+  });
+
+  it('серверные SKIP_DOM-файлы получают видную секцию + перечислены (C2/PIPE-1)', () => {
+    const log: ChangelogEntry[] = [
+      { file: 'checkout.php', type: 'SKIP_DOM', description: 'серверные теги' },
+      { file: 'inc/header.php', type: 'SKIP_DOM', description: 'серверные теги' },
+    ];
+    const md = renderReport(baseStats({ serverTagsFilesSkipped: 2, phpFilesProcessed: 2 }), log, []);
+    expect(md).toContain('НЕ очищены');
+    expect(md).toContain('checkout.php');
+    expect(md).toContain('inc/header.php');
+    expect(md).toContain('РУЧНАЯ ПРОВЕРКА');
   });
 });

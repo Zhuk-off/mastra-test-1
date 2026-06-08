@@ -74,15 +74,22 @@ function getDomPasses(runAdvanced: boolean): DomPass[] {
   return passes;
 }
 
-function applyHtmlPasses(html: string, ctx: PassContext, runAdvanced: boolean): { html: string; counts: HtmlStatsDelta } {
-  // PHP/ASP-вставки cheerio парсить нельзя — испортит серверные теги. Пропускаем + флаг.
+function applyHtmlPasses(
+  html: string,
+  ctx: PassContext,
+  runAdvanced: boolean,
+): { html: string; counts: HtmlStatsDelta; skippedServerTags: boolean } {
+  // PHP/ASP-вставки cheerio парсить нельзя — испортит серверные теги. Пропускаем DOM-проходы,
+  // но НЕ молча: помечаем файл в changelog И в CleanStats (см. cleanSite), чтобы попало в отчёт
+  // и нельзя было принять «грязный» серверный файл за очищенный. DOM-1 / PIPE-1.
   if (hasServerTags(html)) {
     ctx.log.push({
       file: ctx.relPath,
       type: 'SKIP_DOM',
-      description: 'Файл содержит серверные теги (<?php ?> / <% %>) — DOM-проходы пропущены, проверьте вручную.',
+      description:
+        'Серверные теги (<?php ?> / <% %>) — DOM-очистка НЕ применялась (нет удаления трекеров/exfil, нет CSP). ПРОВЕРЬТЕ И ПОЧИСТИТЕ ВРУЧНУЮ.',
     });
-    return { html, counts: {} };
+    return { html, counts: {}, skippedServerTags: true };
   }
 
   const $ = parseHtml(html);
@@ -101,7 +108,7 @@ function applyHtmlPasses(html: string, ctx: PassContext, runAdvanced: boolean): 
   // Финальная косметика — collapse тройных пустых строк
   currentHtml = currentHtml.replace(/\n[ \t]*\n[ \t]*\n+/g, '\n\n');
 
-  return { html: currentHtml, counts: totalCounts };
+  return { html: currentHtml, counts: totalCounts, skippedServerTags: false };
 }
 
 export async function createBackup(siteDir: string): Promise<string> {
@@ -150,6 +157,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     macrosFlagged: 0,
     cspInjected: 0,
     phpBackdoorWarning: false,
+    serverTagsFilesSkipped: 0,
   };
 
   // Нормализуем структуру лендинга: находим главный файл, перемещаем в корень,
@@ -204,7 +212,8 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
         unversionedLibReplacements,
       };
 
-      const { html: after, counts } = applyHtmlPasses(before, ctx, runAdvanced);
+      const { html: after, counts, skippedServerTags } = applyHtmlPasses(before, ctx, runAdvanced);
+      if (skippedServerTags) stats.serverTagsFilesSkipped++;
       if (after !== before) {
         await writeFile(file, after, 'utf8');
       }
