@@ -135,3 +135,14 @@ KEY `onkeydown=`, DOC склейка/iframe.
 2. **RED-1 + KEY-1** — редирект и keylogger (самые ценные угрозы) только WARN → уезжают в прод;
    сделать действием/блокирующим флагом.
 3. **OBF-1 + MET-1** — whole-file delete по узкой эвристике: карантин вместо удаления, оценка по AST.
+
+---
+
+## ✅ Статус фиксов (C4 — в работе, по под-фиксам)
+
+- **DET-3 ✅** — единый `isExternalUrl` вынесен в `detectors/helpers.ts` (+ `extractStringArg`),
+  3 копии удалены. Новая версия обрабатывает `//host` (через базу `https://<mainHost>`) → `fetch`,
+  `location.href=`, `document.write(<script src>)` на `//evil` теперь детектятся. Относительные пути
+  не считаются внешними (нет FP даже при пустом mainHost). Тесты: `detector-external-url.test.ts`.
+- **DET-1** 🛠 — следующий под-фикс (флагать нелитеральный сетевой URL как подозрительный).
+- **DET-2, DEC-1/2, RED-1, KEY-1, DOC-1, OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали.

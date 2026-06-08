@@ -1,34 +1,9 @@
 import * as walk from 'acorn-walk';
 import type { Program, Node } from 'acorn';
-import { isTrustedHost } from '../../../registry/trusted-hosts.js';
 import { SUSPICIOUS_CALL_GLOBALS } from '../../../registry/suspicious-globals.js';
 import type { DetectionResult, DetectorContext } from '../ast/types.js';
 import { posToLine, snippetAt } from '../ast/parse.js';
-
-function isExternalUrl(url: string, mainHost: string): boolean {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname;
-    // Проверяем: не trusted host, не mainHost, не относительный
-    if (isTrustedHost(host)) return false;
-    if (host === mainHost || host.endsWith('.' + mainHost)) return false;
-    return true;
-  } catch {
-    return false; // относительный URL — не внешний
-  }
-}
-
-function extractStringArg(node: unknown): string | null {
-  if (
-    node &&
-    typeof node === 'object' &&
-    (node as { type?: string }).type === 'Literal' &&
-    typeof (node as { value?: unknown }).value === 'string'
-  ) {
-    return (node as { value: string }).value;
-  }
-  return null;
-}
+import { isExternalUrl, extractStringArg } from './helpers.js';
 
 export function detectExfilCalls(
   ast: Program,
