@@ -144,5 +144,10 @@ KEY `onkeydown=`, DOC склейка/iframe.
   3 копии удалены. Новая версия обрабатывает `//host` (через базу `https://<mainHost>`) → `fetch`,
   `location.href=`, `document.write(<script src>)` на `//evil` теперь детектятся. Относительные пути
   не считаются внешними (нет FP даже при пустом mainHost). Тесты: `detector-external-url.test.ts`.
-- **DET-1** 🛠 — следующий под-фикс (флагать нелитеральный сетевой URL как подозрительный).
-- **DET-2, DEC-1/2, RED-1, KEY-1, DOC-1, OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали.
+- **DEC-1 ✅** — в `remove-inline-exfil.ts` удаление exfil-вызова больше не оставляет битый JS:
+  если вызов — самостоятельный statement, убираем целиком; иначе (`var x = fetch()`, `a && fetch()`,
+  `foo(fetch())`) нейтрализуем подстановкой `void 0` (синтаксис сохраняется, остальной inline-код не
+  рушится). Родитель узла определяется через `walk.ancestor`. Тесты: `remove-inline-exfil.test.ts`.
+- **DET-1** 🛠 — флагать нелитеральный сетевой URL как подозрительный (нужна проводка WARN-результатов
+  в отчёт: `remove-inline-exfil` фильтрует только `shouldRemove`; FP-шум — взвесить).
+- **DET-2, DEC-2, RED-1, KEY-1, DOC-1, OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали.

