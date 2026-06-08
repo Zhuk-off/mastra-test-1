@@ -148,6 +148,14 @@ KEY `onkeydown=`, DOC склейка/iframe.
   если вызов — самостоятельный statement, убираем целиком; иначе (`var x = fetch()`, `a && fetch()`,
   `foo(fetch())`) нейтрализуем подстановкой `void 0` (синтаксис сохраняется, остальной inline-код не
   рушится). Родитель узла определяется через `walk.ancestor`. Тесты: `remove-inline-exfil.test.ts`.
+- **DET-2 🛠 (member/bracket готово)** — добавлены `isGlobalCallee`/`isMethodCallee`/`memberPropName`
+  в `helpers.ts`; `detect-exfil-calls` ловит `window.fetch`/`self.fetch`/`window['fetch']`,
+  `navigator['sendBeacon']`, `document['write']`/`writeln`, `new window.WebSocket`, `new window.Image().src`.
+  Тесты: `detector-indirection.test.ts`. **Остаток DET-2:** резолв алиасов (`const f=fetch; f()`),
+  двухстрочный `var img=new Image(); img.src=evil`, `document.createElement('script').src=` — нужен
+  лёгкий data-flow, отдельно.
 - **DET-1** 🛠 — флагать нелитеральный сетевой URL как подозрительный (нужна проводка WARN-результатов
   в отчёт: `remove-inline-exfil` фильтрует только `shouldRemove`; FP-шум — взвесить).
-- **DET-2, DEC-2, RED-1, KEY-1, DOC-1, OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали.
+- **RED-1, KEY-1** — требуют ПОЛИТИЧЕСКОГО решения (эскалация WARN→действие может задеть легит-редиректы) —
+  согласовать с владельцем.
+- **DEC-2, DOC-1, OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали.

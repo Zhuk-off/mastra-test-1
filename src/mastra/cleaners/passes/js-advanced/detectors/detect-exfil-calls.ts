@@ -3,7 +3,7 @@ import type { Program, Node } from 'acorn';
 import { SUSPICIOUS_CALL_GLOBALS } from '../../../registry/suspicious-globals.js';
 import type { DetectionResult, DetectorContext } from '../ast/types.js';
 import { posToLine, snippetAt } from '../ast/parse.js';
-import { isExternalUrl, extractStringArg } from './helpers.js';
+import { isExternalUrl, extractStringArg, isGlobalCallee, isMethodCallee, memberPropName } from './helpers.js';
 
 export function detectExfilCalls(
   ast: Program,
@@ -15,8 +15,8 @@ export function detectExfilCalls(
     NewExpression(node: Node) {
       const n = node as any;
       const { source, mainHost } = ctx;
-      // new WebSocket('wss://external...')
-      if (n.callee?.type === 'Identifier' && n.callee.name === 'WebSocket') {
+      // new WebSocket('wss://external...') / new window.WebSocket(...)
+      if (isGlobalCallee(n.callee, 'WebSocket')) {
         const url = extractStringArg(n.arguments[0]);
         if (
           url &&
@@ -43,8 +43,8 @@ export function detectExfilCalls(
       const n = node as any;
       const { source, mainHost } = ctx;
 
-      // fetch('https://external...')
-      if (n.callee?.name === 'fetch') {
+      // fetch('https://external...') / window.fetch / window['fetch']
+      if (isGlobalCallee(n.callee, 'fetch')) {
         const url = extractStringArg(n.arguments[0]);
         if (url && isExternalUrl(url, mainHost)) {
           results.push({
@@ -60,12 +60,8 @@ export function detectExfilCalls(
         }
       }
 
-      // navigator.sendBeacon(url)
-      if (
-        n.callee?.type === 'MemberExpression' &&
-        n.callee.object?.name === 'navigator' &&
-        n.callee.property?.name === 'sendBeacon'
-      ) {
+      // navigator.sendBeacon(url) / navigator['sendBeacon'] / window.navigator.sendBeacon
+      if (isMethodCallee(n.callee, 'navigator', 'sendBeacon')) {
         const url = extractStringArg(n.arguments[0]);
         if (!url || isExternalUrl(url, mainHost)) {
           results.push({
@@ -95,11 +91,10 @@ export function detectExfilCalls(
         });
       }
 
-      // document.write('<script src="https://external.com/...">')
+      // document.write/writeln('<script src="https://external.com/...">') + bracket-формы
       if (
-        n.callee?.type === 'MemberExpression' &&
-        n.callee.object?.name === 'document' &&
-        n.callee.property?.name === 'write'
+        isMethodCallee(n.callee, 'document', 'write') ||
+        isMethodCallee(n.callee, 'document', 'writeln')
       ) {
         const html = extractStringArg(n.arguments[0]);
         if (html) {
@@ -128,9 +123,9 @@ export function detectExfilCalls(
       // new Image().src = 'https://external.com/pixel'
       if (
         n.left?.type === 'MemberExpression' &&
-        n.left.property?.name === 'src' &&
+        memberPropName(n.left) === 'src' &&
         n.left.object?.type === 'NewExpression' &&
-        n.left.object?.callee?.name === 'Image'
+        isGlobalCallee(n.left.object?.callee, 'Image')
       ) {
         const url = extractStringArg(n.right);
         if (url && isExternalUrl(url, ctx.mainHost)) {
