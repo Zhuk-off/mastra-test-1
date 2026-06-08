@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, mkdir, readFile, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { rm } from 'node:fs/promises';
 import { normalizeLandingStructure } from '../normalize-landing-structure.js';
 
@@ -899,5 +899,65 @@ describe('BUG #16 — pathsRewritten counts resources, not occurrences', () => {
 
     const stats = await normalizeLandingStructure(tmp);
     expect(stats.pathsRewritten).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NORM-1 — path traversal containment (Critical)
+// ---------------------------------------------------------------------------
+
+describe('NORM-1 — путь не должен выходить за siteDir', () => {
+  it('НЕ удаляет/не тащит в сайт файл вне siteDir по ссылке ../ из HTML', async () => {
+    const victimDir = await mkdtemp(join(tmpdir(), 'nls-victim-'));
+    const secret = join(victimDir, 'secret.png');
+    await writeFile(secret, 'TOP SECRET', 'utf8');
+    try {
+      const rel = relative(tmp, secret).replace(/\\/g, '/'); // ../nls-victim-xxxx/secret.png
+      await setup(tmp, {
+        'index.html': `<!DOCTYPE html><html><head><title>x</title></head><body><img src="${rel}"></body></html>`,
+      });
+
+      await normalizeLandingStructure(tmp);
+
+      // Файл-жертва на месте (не перемещён/не удалён) и НЕ затащен в собранный сайт.
+      expect(await exists(secret)).toBe(true);
+      expect(await read(secret)).toBe('TOP SECRET');
+      expect(await exists(join(tmp, 'images', 'secret.png'))).toBe(false);
+    } finally {
+      await rm(victimDir, { recursive: true, force: true });
+    }
+  });
+
+  it('НЕ тащит в сайт файл вне siteDir по ссылке ../ из CSS url()', async () => {
+    const victimDir = await mkdtemp(join(tmpdir(), 'nls-victim-'));
+    const secret = join(victimDir, 'leak.png');
+    await writeFile(secret, 'BINARY', 'utf8');
+    try {
+      // CSS-ссылки резолвятся от ИСХОДНОГО расположения css-файла (корень tmp).
+      const rel = relative(tmp, secret).replace(/\\/g, '/');
+      await setup(tmp, {
+        'index.html': `<!DOCTYPE html><html><head><title>x</title><link rel="stylesheet" href="main.css"></head><body><p>hi</p></body></html>`,
+        'main.css': `body{background:url("${rel}")}`,
+      });
+
+      await normalizeLandingStructure(tmp);
+
+      expect(await exists(secret)).toBe(true);
+      expect(await read(secret)).toBe('BINARY');
+    } finally {
+      await rm(victimDir, { recursive: true, force: true });
+    }
+  });
+
+  it('РОБАСТНОСТЬ: легитимный ../ ВНУТРИ siteDir по-прежнему переезжает', async () => {
+    await setup(tmp, {
+      'pages/index.html': `<!DOCTYPE html><html><head><title>x</title></head><body><img src="../shared/logo.png"></body></html>`,
+      'shared/logo.png': '',
+    });
+
+    const stats = await normalizeLandingStructure(tmp);
+
+    expect(stats.filesMoved).toBeGreaterThanOrEqual(1);
+    expect(await exists(join(tmp, 'images', 'logo.png'))).toBe(true);
   });
 });

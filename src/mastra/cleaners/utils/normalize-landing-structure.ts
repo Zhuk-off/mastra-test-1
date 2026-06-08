@@ -1,5 +1,5 @@
-import { resolve, dirname, join, relative, extname, basename } from 'node:path';
-import { readFile, writeFile, rename, mkdir, stat, open, link, unlink, readdir, rmdir, copyFile } from 'node:fs/promises';
+import { resolve, dirname, join, relative, extname, basename, isAbsolute } from 'node:path';
+import { readFile, writeFile, rename, mkdir, stat, open, link, unlink, readdir, rmdir, copyFile, realpath } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { walkFiles } from './walk.js';
 
@@ -154,6 +154,27 @@ function isRelativeUrl(url: string): boolean {
   return true;
 }
 
+/** true если abs лежит ВНУТРИ root по нормализованному пути (ловит `../`). */
+function isPathInside(root: string, abs: string): boolean {
+  const rel = relative(root, abs);
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+}
+
+/**
+ * NORM-1: ресурс обязан лежать ВНУТРИ siteDir. `realpath` резолвит и `..`, и
+ * симлинки, и заодно подтверждает существование файла. Закрывает path traversal
+ * (`<img src="../../../.aws/credentials">` → перенос+удаление файла вне siteDir)
+ * и симлинк-побег из распакованного архива лендинга. `realRoot` — заранее
+ * посчитанный `realpath(siteDir)` (сравниваем real-путь с real-путём).
+ */
+async function existingPathInsideSite(realRoot: string, abs: string): Promise<boolean> {
+  try {
+    return isPathInside(realRoot, await realpath(abs));
+  } catch {
+    return false; // файла нет / битый симлинк
+  }
+}
+
 function getTargetDir(filePath: string): string {
   const ext = extname(filePath).toLowerCase();
   if (EXT_TO_DIR[ext]) return EXT_TO_DIR[ext];
@@ -228,6 +249,7 @@ interface ResourceRef {
 
 async function collectResources(
   indexHtmlPath: string,
+  realSite: string,
 ): Promise<Map<string, ResourceRef>> {
   const html = await readFile(indexHtmlPath, 'utf8');
   const resources = new Map<string, ResourceRef>();
@@ -262,11 +284,9 @@ async function collectResources(
         const fsUrl = rawUrl.split('?')[0]!.split('#')[0]!;
         const urlSuffix = rawUrl.slice(fsUrl.length);
         const absolutePath = resolve(baseDir, decodePathSafe(fsUrl));
-        try {
-          await stat(absolutePath);
-        } catch {
-          continue;
-        }
+        // NORM-1: не выходить за siteDir (ни через ../, ни через симлинк). Заодно
+        // подтверждает существование файла (раньше тут был stat).
+        if (!(await existingPathInsideSite(realSite, absolutePath))) continue;
 
         const targetDir = getTargetDir(absolutePath);
         if (!targetDir) continue;
@@ -342,8 +362,11 @@ export async function normalizeLandingStructure(
 
   stats.mainFileFound = relative(siteDir, main.path);
 
+  // NORM-1: реальный путь siteDir — эталон для проверки, что ресурс внутри сайта.
+  const realSite = await realpath(siteDir).catch(() => siteDir);
+
   // Collect resources BEFORE renaming — paths in HTML are relative to the original location
-  const resources = await collectResources(main.path);
+  const resources = await collectResources(main.path, realSite);
 
   // Always output index.html regardless of original extension (PHP code will be stripped below)
   stats.mainFileExtension = 'html';
@@ -449,11 +472,9 @@ export async function normalizeLandingStructure(
       if (movedFiles.has(absPath)) {
         newFilePath = movedFiles.get(absPath)!;
       } else {
-        try {
-          await stat(absPath);
-        } catch {
-          continue;
-        }
+        // NORM-1: новый файл — только если он внутри siteDir (../ или симлинк наружу → пропуск);
+        // existingPathInsideSite заодно подтверждает существование (раньше — stat).
+        if (!(await existingPathInsideSite(realSite, absPath))) continue;
 
         const targetDir = getTargetDir(absPath);
         if (!targetDir) continue;

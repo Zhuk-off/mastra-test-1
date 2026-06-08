@@ -94,7 +94,7 @@
 | PIPE-4 | pipeline.ts | 🟨 | Bypass | Пост-обработка правит даже SKIP_DOM-нутые серверные файлы | 🆕 |
 | PIPE-6 | pipeline.ts | 🟨 | Robust/Perf | Сетевой репин-фетч в горячем цикле, фолбэк неясен | 🆕 |
 | PIPE-5 | pipeline.ts | 🟩 | Low | `bytes*` = UTF-16 length; схлопывание `\n` задевает `<pre>` | 🆕 |
-| NORM-1 | normalize-…ts | 🟥 | Bypass/Safety | Path traversal `../` → перенос+удаление файлов вне siteDir | 🆕 |
+| NORM-1 | normalize-…ts | 🟥 | Bypass/Safety | Path traversal `../` → перенос+удаление файлов вне siteDir | ✅ |
 | NORM-2 | normalize-…ts | 🟧 | Bypass/Robust | PHP-стрип только главного файла, требует `?>`; ASP/вторичные мимо | 🆕 |
 | NORM-3 | normalize-…ts | 🟧 | Robustness | Неполный сбор ссылок (lazy-load/poster/@import) + переезд → битые ссылки | 🆕 |
 | NORM-4 | normalize-…ts | 🟨 | Robustness | Замена ссылок контекстно-слепа (бьёт inline-JS/meta) | 🆕 |
