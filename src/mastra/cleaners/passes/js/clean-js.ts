@@ -48,7 +48,7 @@ export async function cleanJsFile(
       log.push({
         file: relPath,
         type: 'OBFUSCATED_JS',
-        description: 'Файл удалён: обнаружена обфускация (_0x переменные / eval packer / fromCharCode)',
+        description: 'Файл изолирован в карантин: обфускация (_0x переменные / eval packer / fromCharCode)',
         lineNumber: 1,
       });
       return { removed: 0, partialCleaned: false, isMetricFile: false, isObfuscated: true, detectorWarnings: 0 };

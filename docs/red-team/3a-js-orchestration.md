@@ -157,5 +157,9 @@ CJS-3 (непарсимый JS → флаг, не тишина), EVAL-2/SW-1 (re
   `let ast`, `ast = parseJs(content)`, а keylogger/redirect/docWrite вынесены во второй `if (ast)` на
   актуальном дереве. Раньше старые позиции на укоротившемся `content` давали порчу файла /
   `MagicString: Character is out of bounds` (краш). Тест: `passes/js/__tests__/clean-js.test.ts`.
-- **CJS-2 / OBF-1 / MET-1** 🛠 — карантин-вместо-`unlink` для obfuscated/metric (C5б) — следующий шаг.
+- **CJS-2 ✅ (C5б)** — obfuscated/metric JS теперь идут в карантин (`quarantineFile` сохраняет полное
+  содержимое в `_quarantine/`), а затем убираются с деплоя — вместо тихого `unlink`. Восстановимо
+  гранулярно (раньше — только из общего `_backup`). Тест: `__tests__/pipeline-quarantine.test.ts`.
+  **OBF-1/MET-1 🛠**: деструктивное действие исправлено (delete→карантин), но соундность самих
+  детекторов (узкие сигнатуры, подсчёт идентификаторов по AST, «полезность» по AST) — остаётся.
 - **CJS-3, CJS-4** — не трогали (не глушить AST молча; regex не должен ломать парс) — отдельно.

@@ -64,10 +64,10 @@ export function renderReport(
   const deletionTypes = ['OBFUSCATED_JS', 'METRIC_FILE', 'DEAD_JS_FILE'];
   const deletions = log.filter((e) => deletionTypes.includes(e.type));
   if (deletions.length > 0) {
-    L.push(`## 🗑 Удалённые файлы — ${deletions.length} шт. (необратимо, ПРОВЕРЬТЕ на ложные срабатывания)`, '');
+    L.push(`## 🗑 Удалённые файлы — ${deletions.length} шт. (ПРОВЕРЬТЕ на ложные срабатывания)`, '');
     L.push(
-      'Файлы удалены целиком по эвристике (обфускация / metric-сигнатура / 0% coverage). ' +
-        'Если удалено ошибочно — восстановите из `_backup`.',
+      'Файлы убраны со страницы по эвристике (обфускация / metric-сигнатура / 0% coverage). ' +
+        'Восстановление: obfuscated/metric — из `_quarantine/`, любой файл — из `_backup`.',
       '',
     );
     for (const d of deletions) L.push(`- **${d.type}** \`${d.file}\` — ${d.description}`);

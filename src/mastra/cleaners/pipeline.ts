@@ -5,7 +5,7 @@ import { extractMainHostFromDir } from './utils/offer-detector.js';
 import { walkFiles } from './utils/walk.js';
 import { writeChangelog } from './utils/changelog.js';
 import { parseHtml, serializeHtml, hasServerTags } from './utils/html-dom.js';
-import { writeQuarantine } from './utils/quarantine.js';
+import { writeQuarantine, quarantineFile } from './utils/quarantine.js';
 import { writeCleanReport } from './utils/report.js';
 import { cleanSvgFile } from './passes/svg/clean-svg.js';
 import { cleanJsFile, type CleanJsResult } from './passes/js/clean-js.js';
@@ -295,6 +295,8 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
   // Удаляем метрик-файлы и чистим <script src> в HTML
   if (metricFilesToDelete.size > 0) {
     for (const absPath of metricFilesToDelete) {
+      // C5б: карантин (полное содержимое восстановимо) перед удалением с деплоя.
+      await quarantineFile(absPath, siteDir, quarantine, 'js-metric', 'metric-файл (AST-сигнатура)');
       await unlink(absPath);
     }
     stats.metricFilesRemoved += metricFilesToDelete.size;
@@ -320,6 +322,8 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
   // Удаляем обфусцированные JS-файлы и чистим <script src> в HTML
   if (obfuscatedFilesToDelete.size > 0) {
     for (const absPath of obfuscatedFilesToDelete) {
+      // C5б: карантин (полное содержимое восстановимо) перед удалением с деплоя.
+      await quarantineFile(absPath, siteDir, quarantine, 'js-obfuscated', 'обфускация (_0x / packer / fromCharCode)');
       await unlink(absPath);
     }
     stats.obfuscatedFilesRemoved += obfuscatedFilesToDelete.size;

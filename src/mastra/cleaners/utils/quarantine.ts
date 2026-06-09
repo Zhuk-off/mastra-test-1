@@ -3,8 +3,8 @@
  * выносим человеку в отчёт. Удаляем с живой страницы (она становится безопасной),
  * но сохраняем оригинал (можно восстановить, если ложное срабатывание).
  */
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { join, relative } from 'node:path';
 import type { CheerioAPI } from 'cheerio';
 import type { Element } from 'domhandler';
 import type { PassContext, QuarantineItem } from '../types.js';
@@ -36,6 +36,33 @@ export function quarantineNode(
     codeSnippet: snippet.slice(0, 300),
   });
   $(el).remove();
+}
+
+/**
+ * Кладёт ВЕСЬ файл в карантин: сохраняет полное содержимое (восстановимо) как
+ * QuarantineItem. Сам файл НЕ удаляет — это делает вызывающий код (карантин = убрать
+ * с деплоя, но сохранить). Распространяет HTML-принцип «карантин вместо тихого
+ * удаления» на JS-файлы (C5б: obfuscated/metric раньше просто unlink-ались).
+ */
+export async function quarantineFile(
+  absPath: string,
+  siteDir: string,
+  quarantine: QuarantineItem[],
+  kind: string,
+  reason: string,
+): Promise<void> {
+  let snippet = '';
+  try {
+    snippet = await readFile(absPath, 'utf8');
+  } catch {
+    return; // файла нет — нечего сохранять
+  }
+  quarantine.push({
+    kind,
+    reason,
+    snippet,
+    file: relative(siteDir, absPath).replace(/\\/g, '/'),
+  });
 }
 
 /** Сбрасывает карантин на диск: _quarantine/NNN-<kind>.txt + INDEX.md. */
