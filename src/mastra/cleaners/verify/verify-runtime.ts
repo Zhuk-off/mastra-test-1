@@ -4,7 +4,7 @@
  * (phone home) + ошибки консоли. Запрос на доверенный CDN (например, репиннутый
  * code.jquery.com) — ожидаем, не алармим. Запрос на хост вне белого списка — аларм.
  */
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { join, resolve, extname } from 'node:path';
@@ -55,8 +55,67 @@ export interface VerifyResult {
   /** ЧУЖИЕ запросы: внешние И хост вне белого списка — это аларм «звонит на сторону». */
   foreignRequests: string[];
   screenshotPath: string;
-  /** ok = нет чужих запросов и нет JS-ошибок страницы. */
+  /** Найден ли квиз/много кнопок — нужна РУЧНАЯ перепроверка интерактива. */
+  hasQuiz: boolean;
+  /** ok = нет чужих запросов и нет JS-ошибок страницы (после прокликивания). */
   ok: boolean;
+}
+
+/**
+ * C8/VR-1: ИНТЕРАКТИВНАЯ проверка. Пассивная загрузка не ловит phone-home/редирект,
+ * который срабатывает ПО КЛИКУ (клик по офферу/квизу — главный вектор арбитража).
+ * Прокликиваем кликабельные элементы (с preventDefault на навигацию/сабмит, чтобы не
+ * уйти со страницы) — их JS-обработчики срабатывают, и любой запрос на чужой хост
+ * ловится теми же page.on('request')-хендлерами. Возвращает, найден ли квиз.
+ */
+export async function autoInteract(page: Page): Promise<{ hasQuiz: boolean; clicked: number }> {
+  // Не даём кликам/сабмитам реально увести со страницы (JS-редирект location.href= всё
+  // равно зафиксируется как запрос на чужой хост — это и нужно).
+  await page
+    .evaluate(() => {
+      document.addEventListener(
+        'click',
+        (e) => {
+          const t = e.target as HTMLElement | null;
+          if (t?.closest?.('a,button,[role="button"],input[type="button"],input[type="submit"],label')) {
+            e.preventDefault();
+          }
+        },
+        true,
+      );
+      document.addEventListener('submit', (e) => e.preventDefault(), true);
+    })
+    .catch(() => undefined);
+
+  const result = await page
+    .evaluate(() => {
+      const sel = [
+        'a[href]', 'button', '[role="button"]', '[onclick]',
+        'input[type="button"]', 'input[type="submit"]',
+        '.cta', '[class*="btn" i]', '[class*="quiz" i] *', '[class*="answer" i]', '[class*="option" i]',
+      ].join(',');
+      const els = Array.from(new Set(Array.from(document.querySelectorAll(sel)) as HTMLElement[])).slice(0, 80);
+      let clicked = 0;
+      for (const el of els) {
+        try {
+          el.click();
+          clicked++;
+        } catch {
+          /* ignore */
+        }
+      }
+      const hasQuiz =
+        !!document.querySelector(
+          '[class*="quiz" i],[id*="quiz" i],[class*="step" i],[class*="answer" i],[class*="option" i]',
+        ) || document.querySelectorAll('button,[role="button"]').length >= 4;
+      return { hasQuiz, clicked };
+    })
+    .catch(() => ({ hasQuiz: false, clicked: 0 }));
+
+  // Подождать таймеры/сеть, спровоцированные кликами.
+  await page.waitForTimeout(1500).catch(() => undefined);
+  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+  return result;
 }
 
 export async function verifySiteRuntime(
@@ -110,6 +169,9 @@ export async function verifySiteRuntime(
   const screenshotPath = resolve(siteDir, screenshotName);
   await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
 
+  // C8/VR-1: после пассивной загрузки — прокликиваем, чтобы поймать phone-home по клику.
+  const interaction = await autoInteract(page);
+
   await context.close();
   await browser.close();
   await close();
@@ -122,6 +184,7 @@ export async function verifySiteRuntime(
     externalRequests: [...externalRequests],
     foreignRequests: foreign,
     screenshotPath,
+    hasQuiz: interaction.hasQuiz,
     ok: foreign.length === 0 && !pageErrored,
   };
 }

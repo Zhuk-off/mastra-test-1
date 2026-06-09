@@ -193,11 +193,11 @@
 | REP-4 | report.ts | 🟩 | UX | «Всё классифицировано однозначно» при пустом карантине | 🆕 |
 | CHG-1 | changelog.ts | 🟩 | Robustness | pipe-формат ломается на `|`/переносах в сниппете | 🆕 |
 | WALK-2 | walk.ts | 🟩 | Strength/FN | Симлинки не следуются (хорошо для safety; минорный FN) | 🆕 |
-| VR-1 | verify-runtime | 🟧 | Bypass | Verify только пассивная загрузка → exfil по клику не ловится (ложное ok) | 🆕 |
+| VR-1 | verify-runtime | 🟧 | Bypass | Verify только пассивная загрузка → exfil по клику не ловится (ложное ok) | ✅ |
 | VR-2 | verify-runtime | 🟨 | Robustness | Проверяется только index.html (многостраничные мимо) | 🆕 |
 | VR-3 | verify-runtime | 🟨 | Security | Verify исполняет (не блокирует) чужие запросы | 🆕 |
 | DL-2 | download-site | 🟨 | Security | Загрузка исполняет грязный лендинг (exfil во время захвата) | 🆕 |
-| CST-1 | clean-site-tool | 🟨 | Workflow | Не отдаёт путь к `clean-report.md` (safety-net теряется) | 🆕 |
+| CST-1 | clean-site-tool | 🟨 | Workflow | Не отдаёт путь к `clean-report.md` (safety-net теряется) | ✅ |
 | CST-2 | clean-site-tool | 🟩 | Workflow | `noBackup` опасен при необратимых удалениях | 🆕 |
 | DL-1 | download-site | 🟩 | Контекст | T-7 ✅ (base-aware) + EXT-1 подтверждён (`_external/`) | 🆕 |
 

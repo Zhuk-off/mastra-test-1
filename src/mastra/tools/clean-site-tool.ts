@@ -72,8 +72,11 @@ export const cleanSiteTool = createTool({
     cspInjected: z.number(),
     detectorWarnings: z.number(),
     phpBackdoorWarning: z.boolean(),
+    serverTagsFilesStripped: z.number(),
     changelogPath: z.string().optional(),
     quarantineDir: z.string().optional(),
+    /** CST-1: путь к человекочитаемому отчёту (safety-net) — всегда пишется. */
+    reportPath: z.string(),
   }),
   execute: async ({ siteDir, noBackup, advanced, runCoverage }) => {
     const resolvedDir = resolve(siteDir);
@@ -98,6 +101,8 @@ export const cleanSiteTool = createTool({
           ? join(resolvedDir, 'clean-site-changes.log')
           : undefined,
       quarantineDir: stats.quarantinedItems > 0 ? join(resolvedDir, '_quarantine') : undefined,
+      // CST-1: отчёт пишется всегда (writeCleanReport) — отдаём путь, чтобы safety-net не терялся.
+      reportPath: join(resolvedDir, 'clean-report.md'),
     };
   },
 });
