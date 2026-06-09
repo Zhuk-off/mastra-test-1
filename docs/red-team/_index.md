@@ -187,7 +187,7 @@
 | SM-1 | remove-source-maps | 🟩 | Perf | Второй полный обход + двойной I/O | 🆕 |
 | REP-1 | report.ts | 🟨 | Workflow | Отчёт скрывает удаления + баг типа `PHP_BACKDOOR_WARN` | ✅ |
 | QUAR-1 | quarantine.ts | 🟨 | Robustness | `_quarantine/`/отчёт/лог внутри siteDir → уезжают в прод | 🆕 |
-| WALK-1 | walk.ts | 🟨 | Robustness | Нет try/catch на обходе → одна папка роняет cleanSite | 🆕 |
+| WALK-1 | walk.ts | 🟨 | Robustness | Нет try/catch на обходе → одна папка роняет cleanSite | ✅ |
 | QUAR-2 | quarantine.ts | 🟩 | Soundness | Сниппет обрезан 2000 — превью, не источник восстановления | 🆕 |
 | REP-2 | report.ts | 🟩 | Robustness | Warnings обрезаны до 100 | 🆕 |
 | REP-4 | report.ts | 🟩 | UX | «Всё классифицировано однозначно» при пустом карантине | 🆕 |
