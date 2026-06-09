@@ -1,8 +1,7 @@
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { resolve, dirname, relative } from 'node:path';
 import type { DetectedLib } from '../passes/js-advanced/detectors/detect-unversioned-lib.js';
 import type { CdnReplacement } from '../types.js';
+import { fetchOfficial } from './cdn-detector.js';
 
 export async function buildUnversionedCdnReplacements(
   siteDir: string,
@@ -30,18 +29,15 @@ export async function buildUnversionedCdnReplacements(
     const detected = unversionedLibMap.get(relPath);
     if (!detected) continue;
 
-    let content: Buffer;
-    try {
-      content = await readFile(localPath);
-    } catch {
-      continue;
-    }
-
-    const hash = createHash('sha384').update(content).digest('base64');
-    const integrity = `sha384-${hash}`;
+    // UCDN-1: SRI обязан считаться от ОФИЦИАЛЬНОГО CDN-файла, а не от локального — браузер
+    // качает CDN и сверяет хеш; локальная копия почти никогда не байт-в-байт идентична
+    // (другой минификатор/патч) → mismatch → скрипт заблокирован. UCDN-2: если CDN-URL
+    // недоступен (404/сеть) — НЕ репиним (локальный файл остаётся фолбэком), а не ломаем сайт.
     const cdnUrl = detected.lib.cdnUrl(detected.version);
+    const { ok, sri } = await fetchOfficial(cdnUrl);
+    if (!ok) continue;
 
-    result.set(url, { cdnUrl, integrity });
+    result.set(url, { cdnUrl, integrity: sri });
   }
 
   return result;

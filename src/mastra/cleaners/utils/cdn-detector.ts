@@ -103,7 +103,7 @@ function cacheSet(key: string, value: { ok: boolean; sri: string }): { ok: boole
  * и таймаутом 4 c. Возвращает ok=false при недоступности/404/превышении лимита/ошибке.
  * Тело НЕ загружается целиком в память.
  */
-async function fetchOfficial(cdnUrl: string): Promise<{ ok: boolean; sri: string }> {
+export async function fetchOfficial(cdnUrl: string): Promise<{ ok: boolean; sri: string }> {
   const cached = cacheGet(cdnUrl);
   if (cached) return cached;
 

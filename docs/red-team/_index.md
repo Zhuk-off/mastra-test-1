@@ -106,8 +106,8 @@
 | CDN-3 | cdn-detector.ts | 🟨 | Soundness | Версия берётся из первого токена URL → мисверсия | 🆕 |
 | CDN-4 | cdn-detector.ts | 🟨 | Robust/Perf | Кэш фиксирует сетевой сбой на весь прогон; нет TTL | 🆕 |
 | CDN-5 | cdn-detector.ts | 🟩 | Low | Осиротевший локальный файл после hard-репина не удаляется | 🆕 |
-| UCDN-1 | unversioned-cdn.ts | 🟧 | Robustness | SRI от ЛОКАЛЬНОГО файла, src→CDN → mismatch → блок скрипта | 🆕 |
-| UCDN-2 | unversioned-cdn.ts | 🟨 | Robustness | Нет проверки существования CDN-URL (404 + mismatch) | 🆕 |
+| UCDN-1 | unversioned-cdn.ts | 🟧 | Robustness | SRI от ЛОКАЛЬНОГО файла, src→CDN → mismatch → блок скрипта | ✅ |
+| UCDN-2 | unversioned-cdn.ts | 🟨 | Robustness | Нет проверки существования CDN-URL (404 + mismatch) | ✅ |
 | UCDN-3 | unversioned-cdn.ts | 🟨 | Soundness | Версия из 4КБ + fallback → мисверсия минифицированных либ | 🆕 |
 | UCDN-4 | unversioned-cdn.ts | 🟩 | Soundness | FP по баннеру (безопасно, но громко ломает через SRI) | 🆕 |
 | RLL-1 | replace-local-libs…ts | 🟨 | Robustness | Ключ карты — сырой regex-URL, матч по cheerio → промах репина | 🆕 |
