@@ -5,7 +5,13 @@
  * и regex-проходами, и DOM-проходами, и детекторами JS. Не имеет side-effects.
  */
 import { extractHostname, hostMatches, urlMatchesTracker } from './url.js';
-import { TRUSTED_LIB_CDNS, OWN_ASSET_HOSTS, POLICY } from '../registry/policy.js';
+import {
+  TRUSTED_LIB_CDNS,
+  OWN_ASSET_HOSTS,
+  POLICY,
+  MULTITENANT_CDNS,
+  TRUSTED_CDN_PACKAGES,
+} from '../registry/policy.js';
 
 export type ResourceKind =
   | 'script'
@@ -102,6 +108,38 @@ function hostInSet(host: string, set: Set<string>): boolean {
   return false;
 }
 
+/** Типы, где путь мультитенантного CDN решает доверие (исполняемый/встраиваемый контент). */
+const CDN_PATH_CHECK_KINDS = new Set<ResourceKind>(['script', 'stylesheet', 'iframe', 'media']);
+
+/** pathname абсолютного/протокол-относительного URL (без query/fragment), либо ''. */
+function cdnPathnameOf(url: string): string {
+  try {
+    return new URL(url.startsWith('//') ? 'https:' + url : url).pathname;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Доверенный ли ПУТЬ на мультитенантном CDN (AL-3). jsDelivr `/gh/` (любой GitHub-репо)
+ * и неизвестные npm-пакеты (jsdelivr `/npm/...`, unpkg `/...`) → НЕ доверенный. Имя пакета
+ * сверяется с `TRUSTED_CDN_PACKAGES`. (cdnjs курируем и в `MULTITENANT_CDNS` не входит —
+ * сюда не попадает.)
+ */
+function isWhitelistedCdnPath(host: string, url: string): boolean {
+  const path = cdnPathnameOf(url);
+  if (host === 'cdn.jsdelivr.net') {
+    if (/^\/gh\//i.test(path)) return false; // произвольный GitHub-репозиторий
+    const m = /^\/npm\/((?:@[^/]+\/)?[^/@]+)/i.exec(path);
+    return m ? TRUSTED_CDN_PACKAGES.has(m[1]!.toLowerCase()) : false;
+  }
+  if (host === 'unpkg.com') {
+    const m = /^\/((?:@[^/]+\/)?[^/@]+)/i.exec(path);
+    return m ? TRUSTED_CDN_PACKAGES.has(m[1]!.toLowerCase()) : false;
+  }
+  return true; // не путе-зависимый CDN — доверяем по хосту
+}
+
 /** Доверенные хосты для конкретного типа ресурса. */
 function trustedSetsFor(kind: ResourceKind): Set<string>[] {
   // Картинки/медиа могут лежать на нашей инфраструктуре (CloudFront/S3).
@@ -138,6 +176,11 @@ export function classifyResource(url: string, kind: ResourceKind): Classificatio
   }
 
   if (trustedSetsFor(kind).some((s) => hostInSet(host, s))) {
+    // Мультитенантный CDN (jsdelivr/unpkg): доверять по хосту нельзя — тенант задаёт путь.
+    // Для исполняемых/встраиваемых типов сверяем путь; /gh/ и неизвестный пакет → карантин.
+    if (MULTITENANT_CDNS.has(host) && CDN_PATH_CHECK_KINDS.has(kind) && !isWhitelistedCdnPath(host, normalized)) {
+      return { action: POLICY.onUncertain, reason: `мультитенантный CDN, путь вне whitelist: ${host}`, host };
+    }
     return { action: 'keep', reason: `доверенный хост: ${host}`, host };
   }
 

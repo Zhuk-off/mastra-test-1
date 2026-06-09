@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { CDN_LIBRARIES, type CdnLibraryDef } from '../registry/cdn-libraries.js';
+import { TRUSTED_CDN_PACKAGES } from '../registry/policy.js';
 import type { CdnReplacement } from '../types.js';
 import { classifyResource, isAbsoluteUrl } from './allowlist.js';
 
@@ -29,22 +30,27 @@ const VER = String.raw`(\d+\.\d+(?:\.\d+)?(?:[-+.][0-9A-Za-z.]+)?)`;
  * (unpkg-стиль) НАМЕРЕННО убран: он срабатывал на любом хосте и допускал dependency-confusion
  * (подмену внутреннего пакета публичным). Существование URL проверяется отдельно (fetch).
  */
-const CDN_STRUCTURES: { name: string; re: RegExp; build: (m: RegExpMatchArray) => string }[] = [
+const CDN_STRUCTURES: {
+  name: string;
+  re: RegExp;
+  build: (m: RegExpMatchArray) => string;
+  /** Доп. условие на матч (напр. имя пакета в whitelist). */
+  guard?: (m: RegExpMatchArray) => boolean;
+}[] = [
   {
-    name: 'cdnjs', // ^/ajax/libs/<name>/<ver>/<rest>
+    name: 'cdnjs', // ^/ajax/libs/<name>/<ver>/<rest> — cdnjs курируем, репин по структуре ок
     re: new RegExp(String.raw`^/ajax/libs/([^/]+)/${VER}/(.+)$`, 'i'),
     build: (m) => `https://cdnjs.cloudflare.com/ajax/libs/${m[1]}/${m[2]}/${m[3]}`,
   },
   {
-    name: 'jsdelivr-npm', // ^/npm/<name>@<ver>/<rest>
+    name: 'jsdelivr-npm', // ^/npm/<name>@<ver>/<rest> — ТОЛЬКО известные пакеты (CDN-1)
     re: new RegExp(String.raw`^/npm/((?:@[^/]+/)?[^/@]+)@${VER}/(.+)$`, 'i'),
     build: (m) => `https://cdn.jsdelivr.net/npm/${m[1]}@${m[2]}/${m[3]}`,
+    guard: (m) => TRUSTED_CDN_PACKAGES.has(m[1]!.toLowerCase()),
   },
-  {
-    name: 'jsdelivr-gh', // ^/gh/<user>/<repo>@<ver>/<rest>
-    re: new RegExp(String.raw`^/gh/([^/]+)/([^/@]+)@${VER}/(.+)$`, 'i'),
-    build: (m) => `https://cdn.jsdelivr.net/gh/${m[1]}/${m[2]}@${m[3]}/${m[4]}`,
-  },
+  // CDN-1: структура `jsdelivr-gh` (^/gh/<user>/<repo>) УБРАНА намеренно — она отмывала
+  // ЛЮБОЙ GitHub-репозиторий атакующего в «доверенный» cdn.jsdelivr.net. Теперь такой URL
+  // не репинится → уходит в карантин через allowlist (AL-3).
 ];
 
 /** Возвращает pathname без query/fragment (для абсолютных, протокол-относительных и относительных URL). */
@@ -64,7 +70,7 @@ export function genericCdnRepin(url: string): string | null {
   if (!pathname) return null;
   for (const s of CDN_STRUCTURES) {
     const m = s.re.exec(pathname);
-    if (m) return s.build(m);
+    if (m && (!s.guard || s.guard(m))) return s.build(m);
   }
   return null;
 }

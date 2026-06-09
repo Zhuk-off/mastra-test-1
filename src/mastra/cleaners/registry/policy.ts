@@ -24,6 +24,39 @@ export const TRUSTED_LIB_CDNS = new Set<string>([
   'maxcdn.bootstrapcdn.com',
 ]);
 
+/**
+ * Мультитенантные CDN: один хост раздаёт чужой контент, тенант определяется ПУТЁМ
+ * (`/gh/<user>/<repo>` — любой GitHub-репо; `/npm/<pkg>`, unpkg — любой npm-publish).
+ * Доверять им по одному ХОСТУ нельзя (AL-3/CDN-1) — путь сверяется с TRUSTED_CDN_PACKAGES.
+ *
+ * cdnjs.cloudflare.com СОЗНАТЕЛЬНО не здесь: он курируем (либы добавляются через ревью,
+ * произвольный аплоад невозможен), поэтому доверие по хосту для него приемлемо.
+ */
+export const MULTITENANT_CDNS = new Set<string>(['cdn.jsdelivr.net', 'unpkg.com']);
+
+/**
+ * Имена npm-пакетов, которым доверяем на мультитенантных CDN (нижний регистр). Это ровно
+ * то, на что мы РЕПИНИМ (cdn-libraries.ts) + jQuery + пара частых в лендингах. Неизвестный
+ * пакет/`/gh/` → карантин (default-deny; восстановимо). Расширяйте по мере необходимости —
+ * держите в синхроне с `CDN_LIBRARIES`.
+ */
+export const TRUSTED_CDN_PACKAGES = new Set<string>([
+  'jquery',
+  'bootstrap',
+  '@popperjs/core',
+  'popper.js',
+  'swiper',
+  'slick-carousel',
+  'owl.carousel',
+  'aos',
+  'gsap',
+  'lodash',
+  '@fortawesome/fontawesome-free',
+  'font-awesome',
+  'animate.css',
+  'normalize.css',
+]);
+
 /** Ваша инфраструктура для картинок/медиа (img-src / media-src). */
 export const OWN_ASSET_HOSTS = new Set<string>([
   'd4tncaiqdi48w.cloudfront.net',
@@ -39,6 +72,12 @@ export const ALL_TRUSTED_HOSTS = new Set<string>([
 /**
  * CSP-страховка, внедряется в <head> как <meta http-equiv>.
  * Источник: рабочий шаблон владельца. Правится здесь, в одном месте.
+ *
+ * POL-2: `script-src` разрешает весь `https://cdn.jsdelivr.net` (CSP по хосту не умеет
+ * надёжно ограничивать путь). Это лишь defense-in-depth: фактический контроль —
+ * `classifyResource` (AL-3), который ещё на этапе очистки убирает/карантинит
+ * непривилегированные пути jsdelivr (`/gh/`, неизвестные пакеты) до выкладки. То есть до
+ * браузера «плохой» jsdelivr-URL не доходит, и широкое CSP-разрешение по нему не страшно.
  */
 export const CSP_META =
   `<meta http-equiv="Content-Security-Policy" content="` +

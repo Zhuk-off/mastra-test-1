@@ -74,14 +74,14 @@
 |----|------|-----|------|------|--------|
 | AL-1 | allowlist.ts | 🟥 | Bypass | `data:`/`blob:`/`javascript:` в script/iframe → `keep` | ✅ |
 | AL-2 | allowlist.ts | 🟧 | Bypass | Ведущие/внутренние пробел/таб/перевод строки обходят `isAbsoluteUrl` | ✅ |
-| AL-3 | allowlist.ts | 🟧 | Bypass | Мультитенантные CDN (jsdelivr `/gh/`, unpkg) доверены пословно | 🆕 |
+| AL-3 | allowlist.ts | 🟧 | Bypass | Мультитенантные CDN (jsdelivr `/gh/`, unpkg) доверены пословно | ✅ |
 | AL-4 | allowlist.ts | 🟨 | Soundness | Плоский trust-set: font/CSS-хост доверен и для `script` | 🆕 |
 | URL-1 | url.ts | 🟧 | Bypass | `extractHostname` для относительного URL возвращает `example.com` | 🆕 |
 | URL-2 | url.ts | 🟨 | Soundness | Два оракула доверия расходятся (`isExternalUrl` vs `classifyResource`) | 🆕 |
 | URL-3 | url.ts | 🟩 | Soundness | Подстрочный матч трекера → возможны FP (только remove↔quarantine) | 🆕 |
 | URL-4 | url.ts | 🟩 | Bypass | Нет нормализации IDN/punycode (для keep безопасно, для remove — пропуск) | 🆕 |
 | POL-1 | policy.ts | 🟧 | Soundness | CSP-«страховка» слаба: `script-src 'unsafe-inline'` + `img-src facebook` | 🆕 |
-| POL-2 | policy.ts | 🟨 | Bypass | CSP доверяет мультитенантным CDN (jsdelivr/tailwind) | 🆕 |
+| POL-2 | policy.ts | 🟨 | Bypass | CSP доверяет мультитенантным CDN (jsdelivr/tailwind) | ✅ |
 | POL-3 | policy.ts | 🟨 | Robustness | Хосты/макросы захардкожены под одного владельца | 🆕 |
 | POL-4 | policy.ts | 🟩 | Soundness | `isOwnMacro` регистрозависим (`{OFFER}` → чужой) | 🆕 |
 | DOM-1 | html-dom.ts | 🟥 | Bypass/Robust | `hasServerTags` FP (`<%`, текст `<? `) → ВСЯ очистка пропущена | ✅ |
@@ -101,7 +101,7 @@
 | NORM-5 | normalize-…ts | 🟨 | Robustness | `stripPhpCode` рвёт разметку (`href="<?…?>"` → `href=""`) | 🆕 |
 | NORM-6 | normalize-…ts | 🟨 | Robustness | Выбор главного файла узкий (.html/.htm/.php) и недетерминирован | 🆕 |
 | NORM-7 | normalize-…ts | 🟩 | Low | Пробел в URL; UTF-16 мисскоринг; `@import "x"` без url() | 🆕 |
-| CDN-1 | cdn-detector.ts | 🟧 | Bypass | Генерик-репин отмывает чужой хост (`/npm`,`/gh`) в trusted jsdelivr | 🆕 |
+| CDN-1 | cdn-detector.ts | 🟧 | Bypass | Генерик-репин отмывает чужой хост (`/npm`,`/gh`) в trusted jsdelivr | ✅ |
 | CDN-2 | cdn-detector.ts | 🟨 | Soundness | «Репин+SRI» = ложное чувство защиты (SRI ≠ происхождение) | 🆕 |
 | CDN-3 | cdn-detector.ts | 🟨 | Soundness | Версия берётся из первого токена URL → мисверсия | 🆕 |
 | CDN-4 | cdn-detector.ts | 🟨 | Robust/Perf | Кэш фиксирует сетевой сбой на весь прогон; нет TTL | 🆕 |

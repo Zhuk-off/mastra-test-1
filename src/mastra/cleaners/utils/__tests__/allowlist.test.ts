@@ -143,3 +143,65 @@ describe('classifyResource — классификация схемы (AL-1 / 2A-
     expect(classifyResource('tel:+15551234567', 'anchor').action).toBe('keep');
   });
 });
+
+describe('classifyResource — мультитенантные CDN: путь, не только хост (AL-3)', () => {
+  // jsDelivr /gh/<user>/<repo> отдаёт ЛЮБОЙ GitHub-репозиторий; unpkg/npm — любой
+  // опубликованный пакет. Доверять по одному хосту нельзя — проверяем путь по whitelist.
+  it('jsdelivr /gh/ (произвольный репозиторий) → карантин', () => {
+    expect(
+      classifyResource('https://cdn.jsdelivr.net/gh/attacker/repo@main/evil.js', 'script').action,
+    ).toBe('quarantine');
+  });
+
+  it('jsdelivr /npm/<неизвестный пакет> → карантин', () => {
+    expect(
+      classifyResource('https://cdn.jsdelivr.net/npm/attacker-pkg@1.0.0/evil.js', 'script').action,
+    ).toBe('quarantine');
+  });
+
+  it('jsdelivr без распознаваемого пакет-пути (/combine, корень) → карантин', () => {
+    expect(classifyResource('https://cdn.jsdelivr.net/combine/npm/x,npm/y', 'script').action).toBe('quarantine');
+  });
+
+  it('unpkg /<неизвестный пакет> → карантин', () => {
+    expect(classifyResource('https://unpkg.com/evil-pkg@1.0.0/x.js', 'script').action).toBe('quarantine');
+  });
+
+  // ── Известные библиотеки (то, на что мы репиним) остаются keep ──
+  it('jsdelivr /npm/bootstrap → keep (whitelisted)', () => {
+    expect(
+      classifyResource('https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js', 'script').action,
+    ).toBe('keep');
+  });
+
+  it('jsdelivr /npm/swiper → keep', () => {
+    expect(classifyResource('https://cdn.jsdelivr.net/npm/swiper@8.4.5/swiper-bundle.min.js', 'script').action).toBe('keep');
+  });
+
+  it('jsdelivr scoped /npm/@popperjs/core → keep', () => {
+    expect(
+      classifyResource('https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js', 'script').action,
+    ).toBe('keep');
+  });
+
+  it('unpkg /swiper → keep (whitelisted)', () => {
+    expect(classifyResource('https://unpkg.com/swiper@8.4.5/swiper-bundle.min.js', 'script').action).toBe('keep');
+  });
+
+  it('stylesheet: jsdelivr /npm/bootstrap css → keep; /gh/ css → карантин', () => {
+    expect(
+      classifyResource('https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css', 'stylesheet').action,
+    ).toBe('keep');
+    expect(classifyResource('https://cdn.jsdelivr.net/gh/x/y@1/style.css', 'stylesheet').action).toBe('quarantine');
+  });
+
+  it('cdnjs (курируемый) остаётся доверенным по хосту', () => {
+    expect(
+      classifyResource('https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js', 'script').action,
+    ).toBe('keep');
+  });
+
+  it('img с jsdelivr/gh НЕ режется (пассивный тип, проверяем только активный контент)', () => {
+    expect(classifyResource('https://cdn.jsdelivr.net/gh/x/y@1/pic.png', 'img').action).toBe('keep');
+  });
+});

@@ -42,13 +42,26 @@ describe('EXT-1 — _external/<host> через allowlist (не блок-лис�
     expect(quarantine.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('доверенный CDN остаётся локально', async () => {
-    await seedExternal('cdn.jsdelivr.net', 'lib.js', 'ok');
+  it('доверенный одно-тенантный CDN (code.jquery.com) остаётся локально', async () => {
+    await seedExternal('code.jquery.com', 'jquery.min.js', 'ok');
     const quarantine: QuarantineItem[] = [];
 
     await removeTrackerExternals(tmp, quarantine);
 
-    expect(await exists(join(tmp, '_external', 'cdn.jsdelivr.net', 'lib.js'))).toBe(true);
+    expect(await exists(join(tmp, '_external', 'code.jquery.com', 'jquery.min.js'))).toBe(true);
     expect(quarantine.length).toBe(0);
+  });
+
+  it('мультитенантный CDN (jsdelivr) в _external → карантин (путь не верифицируем на уровне папки, AL-3)', async () => {
+    // На уровне директории `_external/cdn.jsdelivr.net/` мы не знаем путь каждого файла
+    // (`/npm/bootstrap` vs `/gh/attacker/...`). Безопасный default-deny — в карантин (восстановимо).
+    await seedExternal('cdn.jsdelivr.net', 'lib.js', 'ok');
+    const quarantine: QuarantineItem[] = [];
+
+    const removed = await removeTrackerExternals(tmp, quarantine);
+
+    expect(removed).toBeGreaterThanOrEqual(1);
+    expect(await exists(join(tmp, '_external', 'cdn.jsdelivr.net'))).toBe(false);
+    expect(quarantine.length).toBeGreaterThanOrEqual(1);
   });
 });
