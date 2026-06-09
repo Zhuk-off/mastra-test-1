@@ -153,7 +153,7 @@
 | PARSE-2 | ast/parse | 🟨 | Robustness | Ошибка парса только в `console.warn`, не в отчёте | 🆕 |
 | PARSE-3 | ast/parse | 🟩 | Robustness | module-first; нет лимита размера/времени парса | 🆕 |
 | RIE-1 | remove-inline-exfil | 🟨 | Robustness | Удаление по узлу: `var x = fetch()` → `var x = ;` (зависит от 3c) | 🆕 |
-| EUF-1 | extract-useful-functions | 🟧 | Robustness | Удаляется объявление функции без мест вызова → ReferenceError | 🆕 |
+| EUF-1 | extract-useful-functions | 🟧 | Robustness | Удаляется объявление функции без мест вызова → ReferenceError | ✅ |
 | EUF-2 | extract-useful-functions | 🟨 | Soundness | Внешние `.js`: режутся только целые функции, не рассыпанный exfil | 🆕 |
 | EUF-3 | extract-useful-functions | 🟩 | Soundness | Консервативные пропуски (мульти-декл/arrow-expr); узкий DOM-список | 🆕 |
 | IDX-1 | js-advanced/index | 🟩 | Гигиена | Пустая заглушка (мёртвый плейсхолдер) | 🆕 |

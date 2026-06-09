@@ -60,7 +60,28 @@ export function extractUsefulFunctions(
   // Множество начальных позиций exfil-вызовов для быстрого поиска
   const exfilStartSet = new Set(exfilResults.map((r) => r.start));
 
-  const toRemove: Array<{ start: number; end: number; name: string }> = [];
+  // EUF-1: ссылки на функцию по имени. Если на pure-exfil функцию где-то ссылаются
+  // (вызов, обработчик, setInterval), удалять ОБЪЯВЛЕНИЕ нельзя — `track is not defined`
+  // оборвёт скрипт и весь код после. Тогда обнуляем ТЕЛО (символ жив, exfil исчезает).
+  // Если ссылок нет — удаляем целиком (как раньше).
+  const identOccurrences: Array<{ name: string; start: number }> = [];
+  walk.simple(ast, {
+    Identifier(n: Node) {
+      const id = n as any;
+      identOccurrences.push({ name: id.name, start: id.start });
+    },
+  });
+  const isReferencedElsewhere = (name: string, declIdStart: number): boolean =>
+    identOccurrences.some((o) => o.name === name && o.start !== declIdStart);
+
+  const toRemove: Array<{
+    outerStart: number;
+    outerEnd: number;
+    bodyStart: number;
+    bodyEnd: number;
+    name: string;
+    referenced: boolean;
+  }> = [];
 
   /**
    * Проверяет, является ли функция «чисто-exfil» — все её call-выражения
@@ -71,7 +92,7 @@ export function extractUsefulFunctions(
    * @param bodyNode   — тело функции (BlockStatement)
    * @param name       — имя функции для лога
    */
-  function checkFunctionNode(outerNode: any, bodyNode: any, name: string): void {
+  function checkFunctionNode(outerNode: any, bodyNode: any, name: string, declIdStart: number): void {
     if (!bodyNode?.body || !Array.isArray(bodyNode.body)) return;
     if (bodyNode.body.length === 0) return;
 
@@ -90,15 +111,22 @@ export function extractUsefulFunctions(
     const bodySource = source.slice(outerNode.start, outerNode.end);
     if (hasDomOperations(bodySource)) return;
 
-    // 4. Все условия выполнены → помечаем к удалению
-    toRemove.push({ start: outerNode.start, end: outerNode.end, name });
+    // 4. Все условия выполнены → к удалению (или обнулению тела, если есть ссылки — EUF-1)
+    toRemove.push({
+      outerStart: outerNode.start,
+      outerEnd: outerNode.end,
+      bodyStart: bodyNode.start,
+      bodyEnd: bodyNode.end,
+      name,
+      referenced: isReferencedElsewhere(name, declIdStart),
+    });
   }
 
   walk.simple(ast, {
     FunctionDeclaration(node: Node) {
       const fn = node as any;
       const name = fn.id?.name ?? '<anonymous>';
-      checkFunctionNode(fn, fn.body, name);
+      checkFunctionNode(fn, fn.body, name, fn.id?.start ?? -1);
     },
 
     VariableDeclaration(node: Node) {
@@ -114,7 +142,7 @@ export function extractUsefulFunctions(
       if (init.expression === true || !init.body?.body) return;
 
       const name = declarator.id?.name ?? '<anonymous>';
-      checkFunctionNode(decl, init.body, name);
+      checkFunctionNode(decl, init.body, name, declarator.id?.start ?? -1);
     },
   });
 
@@ -123,21 +151,32 @@ export function extractUsefulFunctions(
   const ms = new MagicString(source);
 
   // Удаляем от конца к началу — чтобы позиции не сдвигались
-  const sorted = [...toRemove].sort((a, b) => b.start - a.start);
+  const sorted = [...toRemove].sort((a, b) => b.outerStart - a.outerStart);
 
   for (const item of sorted) {
-    // Захватываем trailing ; и пробелы/переносы строк
-    let end = item.end;
-    while (end < source.length && /[;\s]/.test(source[end]!)) end++;
-    ms.remove(item.start, end);
-
-    log.push({
-      file: ctx.relPath,
-      type: 'PARTIAL_JS_CLEAN',
-      description: `Удалена функция с только трекерными вызовами: ${item.name}`,
-      codeSnippet: snippetAt(source, item.start, item.end),
-      lineNumber: posToLine(source, item.start),
-    });
+    if (item.referenced) {
+      // EUF-1: на функцию ссылаются → сохраняем символ, обнуляем тело (нет ReferenceError).
+      ms.overwrite(item.bodyStart, item.bodyEnd, '{}');
+      log.push({
+        file: ctx.relPath,
+        type: 'PARTIAL_JS_CLEAN',
+        description: `Тело обнулено (только трекер-вызовы, символ сохранён): ${item.name}`,
+        codeSnippet: snippetAt(source, item.outerStart, item.outerEnd),
+        lineNumber: posToLine(source, item.outerStart),
+      });
+    } else {
+      // Захватываем trailing ; и пробелы/переносы строк
+      let end = item.outerEnd;
+      while (end < source.length && /[;\s]/.test(source[end]!)) end++;
+      ms.remove(item.outerStart, end);
+      log.push({
+        file: ctx.relPath,
+        type: 'PARTIAL_JS_CLEAN',
+        description: `Удалена функция с только трекерными вызовами: ${item.name}`,
+        codeSnippet: snippetAt(source, item.outerStart, item.outerEnd),
+        lineNumber: posToLine(source, item.outerStart),
+      });
+    }
   }
 
   const result = ms.toString();
