@@ -5,11 +5,31 @@ import type { DetectionResult, DetectorContext } from '../ast/types.js';
 import { posToLine, snippetAt } from '../ast/parse.js';
 import { isExternalUrl, extractStringArg, isGlobalCallee, isMethodCallee, memberPropName } from './helpers.js';
 
+/**
+ * Имена, объявленные в файле (function/var/let/const/параметры) — это собственные
+ * сущности сайта, а не внешние трекер-глобалы. Нужно, чтобы короткое имя вроде
+ * `ga` (get attribute), `hj`, `ym` не приняли за трекер и не удалили (DEC-2).
+ */
+function collectLocalBindings(ast: Program): Set<string> {
+  const names = new Set<string>();
+  const addParams = (params: any[]) => {
+    for (const p of params ?? []) if (p?.type === 'Identifier') names.add(p.name);
+  };
+  walk.simple(ast, {
+    FunctionDeclaration(n: any) { if (n.id?.name) names.add(n.id.name); addParams(n.params); },
+    FunctionExpression(n: any) { if (n.id?.name) names.add(n.id.name); addParams(n.params); },
+    ArrowFunctionExpression(n: any) { addParams(n.params); },
+    VariableDeclarator(n: any) { if (n.id?.type === 'Identifier') names.add(n.id.name); },
+  });
+  return names;
+}
+
 export function detectExfilCalls(
   ast: Program,
   ctx: DetectorContext,
 ): DetectionResult[] {
   const results: DetectionResult[] = [];
+  const localBindings = collectLocalBindings(ast);
 
   walk.simple(ast, {
     NewExpression(node: Node) {
@@ -77,8 +97,13 @@ export function detectExfilCalls(
         }
       }
 
-      // fbq(...), gtag(...), ym(...) и другие трекерные глобалы
-      if (n.callee?.name && SUSPICIOUS_CALL_GLOBALS.has(n.callee.name)) {
+      // fbq(...), gtag(...), ym(...) и другие трекерные глобалы — но НЕ если имя
+      // объявлено локально в файле (собственная функция сайта, DEC-2).
+      if (
+        n.callee?.type === 'Identifier' &&
+        SUSPICIOUS_CALL_GLOBALS.has(n.callee.name) &&
+        !localBindings.has(n.callee.name)
+      ) {
         results.push({
           line: posToLine(source, n.start),
           start: n.start,

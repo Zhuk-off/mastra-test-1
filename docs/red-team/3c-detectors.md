@@ -158,4 +158,8 @@ KEY `onkeydown=`, DOC склейка/iframe.
   в отчёт: `remove-inline-exfil` фильтрует только `shouldRemove`; FP-шум — взвесить).
 - **RED-1, KEY-1** — требуют ПОЛИТИЧЕСКОГО решения (эскалация WARN→действие может задеть легит-редиректы) —
   согласовать с владельцем.
-- **DEC-2, DOC-1, OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали.
+- **DEC-2 ✅** — трекер-вызов (`fbq`/`ga`/`hj`/…) НЕ флагается, если имя объявлено локально в файле
+  (function/var/let/const/параметр) — это собственная функция сайта (`ga()` = get attribute), а не
+  внешний глобал. `collectLocalBindings` в `detect-exfil-calls`. Необъявленный `ga('send',…)` (внешний
+  GA) по-прежнему ловится. Тесты: `detector-indirection.test.ts`.
+- **DOC-1, OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали (OBF-1/MET-1 → это C5: карантин-вместо-delete).

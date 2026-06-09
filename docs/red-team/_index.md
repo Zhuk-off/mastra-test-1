@@ -161,7 +161,7 @@
 | DET-2 | detectors (общее) | 🟧 | Bypass | Только прямой вызов точной формы → алиас/`window.fetch`/`img.src` мимо | 🛠 |
 | DET-3 | detectors (общее) | 🟨 | Bypass | `//host` обходит (new URL без базы); 3 копии isExternalUrl | ✅ |
 | DEC-1 | detect-exfil-calls | 🟨 | Robustness | Узел = CallExpression → `var x=fetch()` → `var x=;` (T-9) | ✅ |
-| DEC-2 | detect-exfil-calls | 🟨 | Soundness | Короткие `ga`/`hj`/`zE` → FP-удаление своей функции | 🆕 |
+| DEC-2 | detect-exfil-calls | 🟨 | Soundness | Короткие `ga`/`hj`/`zE` → FP-удаление своей функции | ✅ |
 | OBF-1 | detect-obfuscation | 🟨 | Soundness | 3 узкие сигнатуры: FN + FP-delete легит-минификата | 🆕 |
 | MET-1 | detect-metric-file | 🟨 | Soundness | «Полезный код» = 5 подстрок → FP-delete файла с логикой | 🆕 |
 | RED-1 | detect-redirect | 🟨 | Policy/FN | Редирект только WARN; `assign`/`top`/косвенность мимо | 🆕 |
