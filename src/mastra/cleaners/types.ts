@@ -75,9 +75,9 @@ export interface CleanStats {
   cspInjected: number;
   /** true если найдены PHP-бэкдоры (require manual inspection) */
   phpBackdoorWarning: boolean;
-  /** Файлы с серверными тегами (<?php ?> / <% %>), которым DOM-очистка НЕ применялась —
-   *  их нужно проверить/почистить вручную. Не «тихий» пропуск: попадает в отчёт. */
-  serverTagsFilesSkipped: number;
+  /** Файлы, из которых вырезаны серверные теги (<?php ?> / <% %>) и затем очищены.
+   *  Свой серверный код добавляется на этапе адаптации. Попадает в отчёт. */
+  serverTagsFilesStripped: number;
 }
 
 export interface CdnReplacement {

@@ -13,7 +13,7 @@ function baseStats(over: Partial<CleanStats> = {}): CleanStats {
     bytesBefore: 0, bytesAfter: 0, deadJsFilesRemoved: 0, partialJsCleaned: 0, inlineExfilRemoved: 0,
     unversionedLibsCdn: 0, metricFilesRemoved: 0, detectorWarnings: 0, obfuscatedFilesRemoved: 0,
     quarantinedItems: 0, macrosFlagged: 0, cspInjected: 0, phpBackdoorWarning: false,
-    serverTagsFilesSkipped: 0, ...over,
+    serverTagsFilesStripped: 0, ...over,
   };
 }
 
@@ -44,16 +44,15 @@ describe('renderReport', () => {
     expect(md).toContain('REDIRECT_WARN');
   });
 
-  it('серверные SKIP_DOM-файлы получают видную секцию + перечислены (C2/PIPE-1)', () => {
+  it('серверные файлы (теги вырезаны + очищены) перечислены в отчёте (C2)', () => {
     const log: ChangelogEntry[] = [
-      { file: 'checkout.php', type: 'SKIP_DOM', description: 'серверные теги' },
-      { file: 'inc/header.php', type: 'SKIP_DOM', description: 'серверные теги' },
+      { file: 'checkout.php', type: 'SERVER_TAGS_STRIPPED', description: 'серверные теги удалены' },
+      { file: 'inc/header.php', type: 'SERVER_TAGS_STRIPPED', description: 'серверные теги удалены' },
     ];
-    const md = renderReport(baseStats({ serverTagsFilesSkipped: 2, phpFilesProcessed: 2 }), log, []);
-    expect(md).toContain('НЕ очищены');
+    const md = renderReport(baseStats({ serverTagsFilesStripped: 2, phpFilesProcessed: 2 }), log, []);
+    expect(md).toContain('Серверные теги удалены');
     expect(md).toContain('checkout.php');
     expect(md).toContain('inc/header.php');
-    expect(md).toContain('РУЧНАЯ ПРОВЕРКА');
   });
 
   it('REP-1: PHP-бэкдор (тип PHP_BACKDOOR_WARN) попадает в раздел предупреждений', () => {

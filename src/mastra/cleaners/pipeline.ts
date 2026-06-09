@@ -4,7 +4,7 @@ import type { CleanStats, DomPass, PassContext, HtmlStatsDelta, ChangelogEntry, 
 import { extractMainHostFromDir } from './utils/offer-detector.js';
 import { walkFiles } from './utils/walk.js';
 import { writeChangelog } from './utils/changelog.js';
-import { parseHtml, serializeHtml, hasServerTags } from './utils/html-dom.js';
+import { parseHtml, serializeHtml, hasServerTags, stripServerTags } from './utils/html-dom.js';
 import { isAbsoluteUrl } from './utils/allowlist.js';
 import { writeQuarantine, quarantineFile } from './utils/quarantine.js';
 import { writeCleanReport } from './utils/report.js';
@@ -79,18 +79,20 @@ function applyHtmlPasses(
   html: string,
   ctx: PassContext,
   runAdvanced: boolean,
-): { html: string; counts: HtmlStatsDelta; skippedServerTags: boolean } {
-  // PHP/ASP-вставки cheerio парсить нельзя — испортит серверные теги. Пропускаем DOM-проходы,
-  // но НЕ молча: помечаем файл в changelog И в CleanStats (см. cleanSite), чтобы попало в отчёт
-  // и нельзя было принять «грязный» серверный файл за очищенный. DOM-1 / PIPE-1.
+): { html: string; counts: HtmlStatsDelta; serverTagsStripped: boolean } {
+  // Серверный код (PHP/ASP) НЕ останавливает очистку (политика владельца C2): чужой
+  // серверный код мы не используем и он несёт риск — вырезаем его ПЕРВЫМ делом и чистим
+  // файл полностью. Свой PHP (spysecure / форма) добавляется на этапе адаптации.
+  let serverTagsStripped = false;
   if (hasServerTags(html)) {
+    html = stripServerTags(html);
+    serverTagsStripped = true;
     ctx.log.push({
       file: ctx.relPath,
-      type: 'SKIP_DOM',
+      type: 'SERVER_TAGS_STRIPPED',
       description:
-        'Серверные теги (<?php ?> / <% %>) — DOM-очистка НЕ применялась (нет удаления трекеров/exfil, нет CSP). ПРОВЕРЬТЕ И ПОЧИСТИТЕ ВРУЧНУЮ.',
+        'Серверные теги (<?php ?> / <% %>) удалены, файл очищен. Свой серверный код (spysecure / отправка формы) добавляется на этапе адаптации.',
     });
-    return { html, counts: {}, skippedServerTags: true };
   }
 
   const $ = parseHtml(html);
@@ -109,7 +111,7 @@ function applyHtmlPasses(
   // Финальная косметика — collapse тройных пустых строк
   currentHtml = currentHtml.replace(/\n[ \t]*\n[ \t]*\n+/g, '\n\n');
 
-  return { html: currentHtml, counts: totalCounts, skippedServerTags: false };
+  return { html: currentHtml, counts: totalCounts, serverTagsStripped };
 }
 
 /**
@@ -197,7 +199,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     macrosFlagged: 0,
     cspInjected: 0,
     phpBackdoorWarning: false,
-    serverTagsFilesSkipped: 0,
+    serverTagsFilesStripped: 0,
   };
 
   // Нормализуем структуру лендинга: находим главный файл, перемещаем в корень,
@@ -254,8 +256,8 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
         unversionedLibReplacements,
       };
 
-      const { html: after, counts, skippedServerTags } = applyHtmlPasses(before, ctx, runAdvanced);
-      if (skippedServerTags) stats.serverTagsFilesSkipped++;
+      const { html: after, counts, serverTagsStripped } = applyHtmlPasses(before, ctx, runAdvanced);
+      if (serverTagsStripped) stats.serverTagsFilesStripped++;
       if (after !== before) {
         await writeFile(file, after, 'utf8');
       }

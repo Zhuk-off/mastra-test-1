@@ -95,7 +95,7 @@
 | PIPE-6 | pipeline.ts | 🟨 | Robust/Perf | Сетевой репин-фетч в горячем цикле, фолбэк неясен | 🆕 |
 | PIPE-5 | pipeline.ts | 🟩 | Low | `bytes*` = UTF-16 length; схлопывание `\n` задевает `<pre>` | 🆕 |
 | NORM-1 | normalize-…ts | 🟥 | Bypass/Safety | Path traversal `../` → перенос+удаление файлов вне siteDir | ✅ |
-| NORM-2 | normalize-…ts | 🟧 | Bypass/Robust | PHP-стрип только главного файла, требует `?>`; ASP/вторичные мимо | 🆕 |
+| NORM-2 | normalize-…ts | 🟧 | Bypass/Robust | PHP-стрип только главного файла, требует `?>`; ASP/вторичные мимо | ✅ |
 | NORM-3 | normalize-…ts | 🟧 | Robustness | Неполный сбор ссылок (lazy-load/poster/@import) + переезд → битые ссылки | 🆕 |
 | NORM-4 | normalize-…ts | 🟨 | Robustness | Замена ссылок контекстно-слепа (бьёт inline-JS/meta) | 🆕 |
 | NORM-5 | normalize-…ts | 🟨 | Robustness | `stripPhpCode` рвёт разметку (`href="<?…?>"` → `href=""`) | 🆕 |
@@ -135,7 +135,7 @@
 | 2D-1 | allowlist.ts (сквозь) | 🟧 | Bypass | `data:`/`javascript:`/`blob:` в src/href не ловит НИКТО (T-3) | ✅ |
 | 2D-2 | strip-event-attrs | 🟨 | Bypass | `on*` снимается только при литеральном url/keyword; обфускация мимо | 🆕 |
 | 2D-3 | event-attrs.ts | 🟨 | Bypass | Реестр `on*` неполон — нет touch/pointer/wheel (mobile) | 🆕 |
-| 2D-4 | inject-csp | 🟩 | Robustness | Размещение ок (T-4); но SKIP_DOM-файлы без CSP (← PIPE-1) | 🆕 |
+| 2D-4 | inject-csp | 🟩 | Robustness | Размещение ок (T-4); но SKIP_DOM-файлы без CSP (← PIPE-1) | ✅ |
 | 2D-5 | remove-inline-exfil-pass | 🟨 | Граница | Непарсимый inline-script молча пропущен; detect — Тир 3 | 🆕 |
 | 2D-6 | replace-offer-links / new pass | 🟧 | Bypass | `<a href="javascript:/data:">` не проходит `classifyResource` → выживает (остаток C1: классификатор готов, проход не подключён) | 🆕 |
 | CJS-1 | clean-js | 🟧 | Correctness | Устаревший AST: docWrite режет по смещённым позициям после extract | ✅ |

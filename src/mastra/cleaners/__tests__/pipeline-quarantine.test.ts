@@ -43,3 +43,28 @@ describe('C5б — destructive-delete JS уходит в карантин, а н
     expect(idx).toContain('app.js');
   });
 });
+
+describe('C2 — серверные теги: вырезать + полностью очистить (не пропускать)', () => {
+  it('файл с <?php …?> и трекером: PHP вырезан И трекер удалён (раньше скипался)', async () => {
+    await writeFile(
+      join(tmp, 'index.html'),
+      '<!doctype html><html><head><title>t</title></head><body><a href="page2.php">go</a></body></html>',
+      'utf8',
+    );
+    await writeFile(
+      join(tmp, 'page2.php'),
+      '<?php session_start(); ?><!doctype html><html><head>' +
+        '<script src="https://www.google-analytics.com/analytics.js"></script>' +
+        '</head><body><p>page2</p></body></html>',
+      'utf8',
+    );
+
+    const stats = await cleanSite(tmp, { runAdvanced: true });
+
+    expect(stats.serverTagsFilesStripped).toBeGreaterThanOrEqual(1);
+    const page2 = await readFile(join(tmp, 'page2.php'), 'utf8');
+    expect(page2).not.toContain('<?php'); // серверный код вырезан
+    expect(page2).not.toContain('google-analytics'); // и файл ОЧИЩЕН (трекер удалён) — раньше скипался
+    expect(page2).toContain('page2'); // полезный контент цел
+  });
+});
