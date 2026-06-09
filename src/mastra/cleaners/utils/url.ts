@@ -3,11 +3,21 @@ import { TRUSTED_HOSTS } from '../registry/trusted-hosts.js';
 import { TRACKER_FILENAME_PATTERNS } from '../registry/tracker-filenames.js';
 import { TRACKER_INLINE_KEYWORDS } from '../registry/tracker-keywords.js';
 
-/** Извлекает hostname из произвольной строки с URL (включая //x.com/y и просто путь). */
+/**
+ * Извлекает hostname из АБСОЛЮТНОГО (`scheme://host`) или протокол-относительного
+ * (`//host`) URL. Для относительных путей (`js/app.js`, `../a`, `/x`, `#frag`,
+ * `mailto:`/`data:` без authority) возвращает null.
+ *
+ * URL-1: раньше `new URL(raw, 'https://example.com')` резолвил ЛЮБОЙ относительный
+ * путь против базы и возвращал `example.com` — footgun: прямой вызыватель (в обход
+ * `isAbsoluteUrl`-гварда) принимал относительный путь за «хост example.com».
+ */
 export function extractHostname(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!/^[a-z][a-z0-9+.\-]*:\/\//i.test(trimmed) && !trimmed.startsWith('//')) return null;
   try {
-    const u = new URL(raw, 'https://example.com');
-    return u.hostname.toLowerCase();
+    const u = new URL(trimmed, 'https://example.com');
+    return u.hostname.toLowerCase() || null;
   } catch {
     return null;
   }

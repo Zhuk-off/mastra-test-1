@@ -76,7 +76,7 @@
 | AL-2 | allowlist.ts | 🟧 | Bypass | Ведущие/внутренние пробел/таб/перевод строки обходят `isAbsoluteUrl` | ✅ |
 | AL-3 | allowlist.ts | 🟧 | Bypass | Мультитенантные CDN (jsdelivr `/gh/`, unpkg) доверены пословно | ✅ |
 | AL-4 | allowlist.ts | 🟨 | Soundness | Плоский trust-set: font/CSS-хост доверен и для `script` | 🆕 |
-| URL-1 | url.ts | 🟧 | Bypass | `extractHostname` для относительного URL возвращает `example.com` | 🆕 |
+| URL-1 | url.ts | 🟧 | Bypass | `extractHostname` для относительного URL возвращает `example.com` | ✅ |
 | URL-2 | url.ts | 🟨 | Soundness | Два оракула доверия расходятся (`isExternalUrl` vs `classifyResource`) | 🆕 |
 | URL-3 | url.ts | 🟩 | Soundness | Подстрочный матч трекера → возможны FP (только remove↔quarantine) | 🆕 |
 | URL-4 | url.ts | 🟩 | Bypass | Нет нормализации IDN/punycode (для keep безопасно, для remove — пропуск) | 🆕 |

@@ -83,3 +83,15 @@
 
 1. **URL-1** — вернуть `null` на относительных, убрать footgun (дёшево).
 2. **URL-2** — свести к одному kind-aware оракулу (после аудита вызывателей, T-2).
+
+---
+
+## ✅ Статус фиксов
+
+- **URL-1 ✅** — `extractHostname` возвращает хост только для `scheme://host`/`//host`; для
+  относительных путей (`js/app.js`, `../a`, `/x`, `#frag`, `mailto:`/`data:` без authority) — `null`
+  (раньше резолвил против базы и выдавал `example.com`). Аудит вызывателей (T-2): все 4 — `classifyResource`
+  (за `isAbsoluteUrl`), `isExternalUrl`+`urlMatchesTracker` (за http(s)/`//`-гвардом), `offer-detector`
+  (за http(s)/`//`-гвардом), `verify-runtime` (URL запросов Playwright всегда абсолютные) — гардированы,
+  поэтому фикс безопасен и заодно убирает фантомный `example.com` в verify. Тесты: новый `url.test.ts`.
+- **URL-2 / URL-3 / URL-4** — НЕ трогали; остаются 🆕.
