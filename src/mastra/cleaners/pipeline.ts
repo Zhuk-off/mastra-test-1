@@ -395,6 +395,10 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     for (const file of deadFiles) {
       if (!file.isDead) continue;
       const absPath = join(siteDir, file.relPath);
+      // COV-1/C5: coverage-эвристика FP-склонна (интерактивный/утилитный код лендинга
+      // часто 0% за быстрый авто-прогон). Карантин (восстановимо) вместо тихого rm —
+      // как для obfuscated/metric. Файл всё равно убираем с деплоя, но не теряем.
+      await quarantineFile(absPath, siteDir, quarantine, 'js-dead-coverage', file.reason);
       try {
         await rm(absPath, { force: true });
       } catch {

@@ -20,7 +20,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **341 зелёный + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **342 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (добавь `-- --advanced` для AST-анализа).
 - Проверка: `npm run verify -- <dir>` (теперь ИНТЕРАКТИВНАЯ — прокликивает).
@@ -101,7 +101,9 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 - **UCDN-1 ✅ ЗАКРЫТА (+ UCDN-2)** — `buildUnversionedCdnReplacements` зовёт `fetchOfficial(cdnUrl)`
   (экспортирован из `cdn-detector`): SRI от ОФИЦИАЛЬНОГО CDN-файла; если CDN 404/недоступен — замена не
   добавляется (локальный файл остаётся фолбэком). Тесты: `unversioned-cdn-detector.test.ts` (мок fetch).
-- **COV-1** ⬅️ **следующая** (последняя 🟧) — coverage удаляет интерактивный JS как «мёртвый» (но coverage opt-in, `runCoverage` по умолч. off).
+- **COV-1 ✅ ЗАКРЫТА (+ ANA-1)** — мёртвый по coverage JS теперь идёт в карантин (`quarantineFile`)
+  перед `rm` (C5, восстановимо); непарсимый файл (`!ast`) больше не считается мёртвым (ANA-1).
+  ⇒ **Весь 🟧 (High) тир закрыт.** Дальше — 🟨 (C6 и средний приоритет).
 
 **C6 — «блок-лист → белый список» (FN-карманы, средний приоритет):**
 - **2A-3** (preconnect/preload через `classifyResource` по `as`/rel + modulepreload + мульти-`rel`),
@@ -127,7 +129,8 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 ## Как начать новую сессию
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры).
-2. Возьми верхнюю незакрытую 🟧-находку (2D-6, DET-1, DET-2, AL-3/CDN-1/POL-2, NORM-3, URL-1, UCDN-1/2 закрыты — начни с **COV-1**, последняя 🟧).
+2. **Весь 🟧 (High) тир закрыт** (2D-6, DET-1, DET-2, AL-3/CDN-1/POL-2, NORM-3, URL-1, UCDN-1/2, COV-1/ANA-1).
+   Дальше — кластер **C6** (блок-лист→белый список: 2A-3/2A-4/CSS-1/CSS-2/MAC-1) и средний 🟨-приоритет.
 3. TDD → фикс → зелёные тесты + чистый tsc → обнови `_index.md` + per-file док → коммит на `redteam-fixes`.
 4. После пачки фиксов — прогон `npm run clean -- <copy> -- --advanced` и `npm run verify -- <copy>` на
    копии реального лендинга (без регресса).
