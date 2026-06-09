@@ -147,4 +147,11 @@
   трекер → удалить; **прочий чужой хост → карантин** (`quarantineDir` переносит в
   `_quarantine/_external/<host>/`, не оставляя локально и не уничтожая). Раньше — голый блок-лист,
   неизвестный чужой хост выживал. Тест: `passes/fs/__tests__/remove-tracker-externals.test.ts`.
-- **CSS-1/2/3, SVG-1/2, PHP-1, SM-1** — не трогали (отдельные находки).
+- **CSS-1 ✅** — `removeTrackerUrls` (для `.css`-файлов) переведён с блок-листа (`urlMatchesTracker`)
+  на `classifyResource(url, 'img')`: неизвестный внешний `url(...)` теперь нейтрализуется в `url('')`
+  (был keep), trusted/own-asset/локальный — сохраняется. Тест: `passes/css/__tests__/remove-tracker-urls.test.ts`.
+- **CSS-2 ✅** — новый DOM-проход `clean-inline-css` чистит трекер-`url()`/`@import` в INLINE CSS:
+  `<style>`-блоках и `style=`-атрибутах (раньше CSS-очистка шла только по внешним `.css`-файлам).
+  Переиспользует те же allowlist-проходы. Подключён в `pipeline` (после `remove-noscript-trackers`).
+  Тест: `passes/html/__tests__/clean-inline-css.test.ts`.
+- **CSS-3, SVG-1/2, PHP-1, SM-1** — не трогали. CSS-3 (макросы во внешнем CSS) — часть кластера MAC-1/CJS-5.

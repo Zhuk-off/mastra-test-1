@@ -28,6 +28,7 @@ import { removeTrackerScripts } from './passes/html/remove-tracker-scripts.js';
 import { removeTrackerJsonLd } from './passes/html/remove-tracker-jsonld.js';
 import { removeInlineTrackers } from './passes/html/remove-inline-trackers.js';
 import { removeNoscriptTrackers } from './passes/html/remove-noscript-trackers.js';
+import { cleanInlineCss } from './passes/html/clean-inline-css.js';
 import { removeTrackerLinks } from './passes/html/remove-tracker-links.js';
 import { removeTrackerMetas } from './passes/html/remove-tracker-metas.js';
 import { removeMetaRefresh } from './passes/html/remove-meta-refresh.js';
@@ -54,6 +55,7 @@ const BASE_DOM_PASSES: DomPass[] = [
   removeTrackerJsonLd,
   removeInlineTrackers,
   removeNoscriptTrackers,
+  cleanInlineCss,            // трекер-url()/@import в inline <style>/style= (CSS-2)
   removeTrackerLinks,        // allowlist <link>
   removeTrackerMetas,
   removeMetaRefresh,
