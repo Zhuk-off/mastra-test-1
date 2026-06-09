@@ -961,3 +961,105 @@ describe('NORM-1 — путь не должен выходить за siteDir', 
     expect(await exists(join(tmp, 'images', 'logo.png'))).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// NORM-3 — полный сбор ссылок (lazy-load / poster / <use> / @import)
+// ---------------------------------------------------------------------------
+
+describe('NORM-3 — расширенный сбор ссылок', () => {
+  it('lazy-load data-src собирается, переезжает и переписывается (главный файл из subdir)', async () => {
+    await setup(tmp, {
+      'pages/index.html': `<!DOCTYPE html><html><body>
+<img data-src="hero.jpg" src="ph.gif">
+</body></html>`,
+      'pages/hero.jpg': 'JPG',
+      'pages/ph.gif': 'GIF',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'images', 'hero.jpg'))).toBe(true);
+    expect(html).toContain('images/hero.jpg'); // data-src переписан
+    expect(html).not.toMatch(/data-src="hero\.jpg"/); // старый путь не остался
+    expect(await exists(join(tmp, 'pages', 'hero.jpg'))).toBe(false); // файл переехал
+  });
+
+  it('<video poster> собирается и переписывается', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><body>
+<video poster="thumb.jpg" src="clip.mp4"></video>
+</body></html>`,
+      'thumb.jpg': 'JPG',
+      'clip.mp4': 'MP4',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'images', 'thumb.jpg'))).toBe(true);
+    expect(html).toContain('poster="images/thumb.jpg"');
+  });
+
+  it('<use href> (SVG-спрайт) переезжает, фрагмент #id сохраняется', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><body>
+<svg><use href="sprite.svg#ico"></use></svg>
+</body></html>`,
+      'sprite.svg': '<svg></svg>',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'images', 'sprite.svg'))).toBe(true);
+    expect(html).toContain('images/sprite.svg#ico');
+  });
+
+  it('data-srcset (несколько кандидатов) переписывается', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><body>
+<img data-srcset="a.jpg 1x, b.jpg 2x">
+</body></html>`,
+      'a.jpg': 'A',
+      'b.jpg': 'B',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'images', 'a.jpg'))).toBe(true);
+    expect(await exists(join(tmp, 'images', 'b.jpg'))).toBe(true);
+    expect(html).toContain('images/a.jpg');
+    expect(html).toContain('images/b.jpg');
+  });
+
+  it('bare @import "x.css" (без url()) в <style> собирается и переписывается', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><head>
+<style>@import "theme.css";</style>
+</head><body>x</body></html>`,
+      'theme.css': 'body{}',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'css', 'theme.css'))).toBe(true);
+    expect(html).toContain('css/theme.css');
+  });
+
+  it('РОБАСТНОСТЬ: data-src с не-файловым значением безопасно игнорируется', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><body>
+<div data-src='{"cfg":1}'></div>
+<img src="real.png">
+</body></html>`,
+      'real.png': 'PNG',
+    });
+
+    // не должно бросить; реальный ресурс при этом переезжает
+    await normalizeLandingStructure(tmp);
+    expect(await exists(join(tmp, 'images', 'real.png'))).toBe(true);
+  });
+});

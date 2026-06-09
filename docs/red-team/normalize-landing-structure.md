@@ -151,5 +151,12 @@ generic-отсечение URI-схем; чтение головы файла п
 - Тесты: 3 кейса в `normalize-landing-structure.test.ts` (HTML `../`-побег не трогает файл-жертву;
   CSS `url(../…)`-побег; легит `../` внутри сайта переезжает). Прогон на реальном лендинге
   (`downloads/1753_landing_archive`) — без регресса (exit 0).
-- **NORM-2 … NORM-7** — НЕ трогали (отдельные находки), остаются 🆕. NORM-2 связан с C2-followup
-  (protect-and-restore серверных блоков).
+- **NORM-3 ✅** — в `collectResources` добавлены паттерны: `data-src`/`data-srcset`/`data-bg`
+  (lazy-load, на любом элементе — не только `<img>`), `poster` (`<video>`), `<use href|xlink:href>`
+  (SVG-спрайты), bare `@import "x.css"` (без `url()`, в inline `<style>`). Для `@import` добавлено
+  отдельное правило переписывания (перед значением пробел, а не `=`/`(`). Остальные формы переписываются
+  существующей логикой (`data-srcset` ловит srcset-переписыватель через `\bsrcset`; прочие — правилом
+  `[=(]['"]`). `#`-фрагмент `<use>` сохраняется. Гард `existingPathInsideSite` (NORM-1) отсекает
+  не-файловые значения (`data-src='{json}'`) без падений. Тесты: +6 в `normalize-landing-structure.test.ts`.
+- **NORM-2 / NORM-4 … NORM-7** — НЕ трогали (отдельные находки), остаются 🆕. NORM-2 связан с
+  C2-followup (protect-and-restore серверных блоков); bare `@import` в самих CSS-файлах — NORM-7.

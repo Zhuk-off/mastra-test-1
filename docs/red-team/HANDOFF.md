@@ -20,7 +20,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **325 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **331 зелёный + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (добавь `-- --advanced` для AST-анализа).
 - Проверка: `npm run verify -- <dir>` (теперь ИНТЕРАКТИВНАЯ — прокликивает).
@@ -92,9 +92,11 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
   `classifyResource` сверяет путь jsdelivr/unpkg (`/gh/`→quarantine, npm-пакет по whitelist);
   `cdn-detector` убрал структуру `jsdelivr-gh` и гейтит `jsdelivr-npm` по whitelist; CSP остаётся
   defense-in-depth (POL-2 митигирован на уровне очистки). cdnjs оставлен по-хостовым (курируем).
-- **NORM-3** ⬅️ **следующая** — неполный сбор ссылок (lazy-load `data-src`, `poster`, `@import`, `<use href>`,
-  некавыченные) + переезд главного файла → битые ссылки. Владелец ценит «всё работает визуально».
-- **URL-1** — `extractHostname('relative')` возвращает `example.com` (база) → риск мисклассификации.
+- **NORM-3 ✅ ЗАКРЫТА** — в `collectResources` добавлены `data-src`/`data-srcset`/`data-bg`/`poster`/
+  `<use href>`/bare `@import`; для @import — своё правило переписывания; `#`-фрагмент `<use>` сохраняется.
+  Остаток: некавыченные атрибуты (`src=logo.png`) — не покрыто (реже встречается); bare `@import` в самих
+  CSS-файлах — это NORM-7.
+- **URL-1** ⬅️ **следующая** — `extractHostname('relative')` возвращает `example.com` (база) → риск мисклассификации.
 - **UCDN-1** — SRI считается от ЛОКАЛЬНОГО файла, а src меняется на CDN → mismatch → браузер блокирует
   скрипт (ломает легит либу). Robustness.
 - **COV-1** — coverage удаляет интерактивный JS как «мёртвый» (но coverage opt-in, `runCoverage` по умолч. off).
@@ -123,7 +125,7 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 ## Как начать новую сессию
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры).
-2. Возьми верхнюю незакрытую 🟧-находку (2D-6, DET-1, DET-2, AL-3/CDN-1/POL-2 закрыты — начни с **NORM-3**).
+2. Возьми верхнюю незакрытую 🟧-находку (2D-6, DET-1, DET-2, AL-3/CDN-1/POL-2, NORM-3 закрыты — начни с **URL-1**).
 3. TDD → фикс → зелёные тесты + чистый tsc → обнови `_index.md` + per-file док → коммит на `redteam-fixes`.
 4. После пачки фиксов — прогон `npm run clean -- <copy> -- --advanced` и `npm run verify -- <copy>` на
    копии реального лендинга (без регресса).

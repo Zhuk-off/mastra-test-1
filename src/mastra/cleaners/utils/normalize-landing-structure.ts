@@ -268,6 +268,14 @@ async function collectResources(
     { regex: /<track\b[^>]*?\bsrc\s*=\s*['"]([^'"]+)['"]/gi },
     { regex: /<iframe\b[^>]*?\bsrc\s*=\s*['"]([^'"]+)['"]/gi },
     { regex: /url\(['"]?([^'")\s]+)['"]?\)/gi },
+    // NORM-3: ленивые/нестандартные ссылки. Без них ресурс не собирался и не переезжал,
+    // и при переезде главного файла из subdir → корень относительный путь ломался.
+    { regex: /<[^>]*?\bdata-src\s*=\s*['"]([^'"]+)['"]/gi },
+    { regex: /<[^>]*?\bdata-srcset\s*=\s*['"]([^'"]+)['"]/gi, isSrcset: true },
+    { regex: /<[^>]*?\bdata-bg\s*=\s*['"]([^'"]+)['"]/gi },
+    { regex: /<[^>]*?\bposter\s*=\s*['"]([^'"]+)['"]/gi },
+    { regex: /<use\b[^>]*?\b(?:xlink:href|href)\s*=\s*['"]([^'"]+)['"]/gi }, // SVG-спрайты
+    { regex: /@import\s+['"]([^'"]+)['"]/gi }, // bare @import без url() (в inline <style>)
   ];
 
   for (const { regex, isSrcset } of patterns) {
@@ -445,6 +453,8 @@ export async function normalizeLandingStructure(
     const before = html;
     html = html.replace(new RegExp(`([=\\(]\\s*['"])${escaped}(['"])`, 'g'), `$1${safeNewPath}$2`);
     html = html.replace(new RegExp(`(url\\()${escaped}(\\))`, 'gi'), `$1${safeNewPath}$2`);
+    // NORM-3: bare @import "x" — перед значением пробел, не `=`/`(`, поэтому отдельным правилом.
+    html = html.replace(new RegExp(`(@import\\s+['"])${escaped}(['"])`, 'gi'), `$1${safeNewPath}$2`);
     if (html !== before || srcsetChangedUrls.has(res.rawUrl)) stats.pathsRewritten++;
   }
   await writeFile(targetIndexPath, html, 'utf8');

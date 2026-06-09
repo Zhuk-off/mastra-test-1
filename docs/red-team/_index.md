@@ -96,7 +96,7 @@
 | PIPE-5 | pipeline.ts | 🟩 | Low | `bytes*` = UTF-16 length; схлопывание `\n` задевает `<pre>` | 🆕 |
 | NORM-1 | normalize-…ts | 🟥 | Bypass/Safety | Path traversal `../` → перенос+удаление файлов вне siteDir | ✅ |
 | NORM-2 | normalize-…ts | 🟧 | Bypass/Robust | PHP-стрип только главного файла, требует `?>`; ASP/вторичные мимо | ✅ |
-| NORM-3 | normalize-…ts | 🟧 | Robustness | Неполный сбор ссылок (lazy-load/poster/@import) + переезд → битые ссылки | 🆕 |
+| NORM-3 | normalize-…ts | 🟧 | Robustness | Неполный сбор ссылок (lazy-load/poster/@import) + переезд → битые ссылки | ✅ |
 | NORM-4 | normalize-…ts | 🟨 | Robustness | Замена ссылок контекстно-слепа (бьёт inline-JS/meta) | 🆕 |
 | NORM-5 | normalize-…ts | 🟨 | Robustness | `stripPhpCode` рвёт разметку (`href="<?…?>"` → `href=""`) | 🆕 |
 | NORM-6 | normalize-…ts | 🟨 | Robustness | Выбор главного файла узкий (.html/.htm/.php) и недетерминирован | 🆕 |
