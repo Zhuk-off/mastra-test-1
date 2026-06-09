@@ -124,7 +124,7 @@
 | 2B-4 | remove-frames | 🟩 | Robustness | Настоящий frameset-лендинг → пустая страница | 🆕 |
 | 2B-5 | remove-tracker-metas | 🟩 | Soundness | Узкий блок-лист (нет robots/индексации, `property=`) | 🆕 |
 | 2B-6 | remove-tracker-jsonld | 🟩 | Soundness | Узко и инертно (regex по тексту, не JSON-parse) | 🆕 |
-| MAC-1 | detect-macros | 🟨 | Soundness | Внешние `.js`/`.css` на макросы не сканируются (твой пример) | 🆕 |
+| MAC-1 | detect-macros | 🟨 | Soundness | Внешние `.js`/`.css` на макросы не сканируются (твой пример) | ✅ |
 | MAC-2 | detect-macros | 🟨 | Soundness | Только `{...}`; `[..]`/`%..%`/`{{..}}` мимо | 🆕 |
 | MAC-3 | detect-macros | 🟨 | Soundness | Template-скрипты/непарсимый inline-JS пропускаются | 🆕 |
 | MAC-4 | detect-macros | 🟩 | Soundness | В CSS макрос ищется только в `url()` (не `content:`) | 🆕 |
@@ -142,7 +142,7 @@
 | CJS-2 | clean-js | 🟨 | Robustness | `detectObfuscation` удаляет весь файл (без карантина) — FP на минифик. либе | ✅ |
 | CJS-3 | clean-js | 🟨 | Robustness | Парс не удался → все AST-детекторы молча пропущены | 🆕 |
 | CJS-4 | clean-js | 🟨 | Robustness | regex SW/eval ломает JS → каскадом глушит AST | 🆕 |
-| CJS-5 | clean-js | 🟨 | Soundness | Макросы во внешних `.js` не сканируются (T-8) | 🆕 |
+| CJS-5 | clean-js | 🟨 | Soundness | Макросы во внешних `.js` не сканируются (T-8) | ✅ |
 | CJS-6 | clean-js | 🟩 | Soundness | warn-слой не гейтит выгрузку | 🆕 |
 | EVAL-1 | remove-eval-obfuscation | 🟨 | Soundness | Узкая регулярка: `window.atob`/`new Function`/`(0,eval)` мимо | 🆕 |
 | EVAL-2 | remove-eval-obfuscation | 🟨 | Robustness | Удаление eval в выражении ломает JS (`var x = eval…`) | 🆕 |
@@ -179,7 +179,7 @@
 | EXT-2 | remove-tracker-externals | 🟩 | Robustness | Висячие ссылки после удаления `_external/` | 🆕 |
 | CSS-1 | remove-tracker-urls | 🟨 | Bypass | CSS `url()` — блок-лист; неизвестный внешний ресурс остаётся | ✅ |
 | CSS-2 | css (inline) | 🟨 | Bypass | Inline `<style>`/`style=` не чистятся от трекер-url() | ✅ |
-| CSS-3 | clean-css | 🟨 | Soundness | Макросы во внешнем CSS не сканируются (T-8) | 🆕 |
+| CSS-3 | clean-css | 🟨 | Soundness | Макросы во внешнем CSS не сканируются (T-8) | ✅ |
 | CSS-4 | css | 🟩 | Bypass | `url(//evil)`/`@import //` обход; косметика номера строки | 🆕 |
 | SVG-1 | clean-svg | 🟨 | Bypass | self-closing/`href`-only `<script>`, неквотированные `on*` мимо | 🆕 |
 | SVG-2 | clean-svg | 🟨 | Bypass | plain `href` (SVG2), `javascript:`, `<style>` в SVG не покрыты | 🆕 |

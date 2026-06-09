@@ -319,7 +319,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
 
     if (ext === '.js' || ext === '.mjs') {
-      const result: CleanJsResult = await cleanJsFile(file, relPath, changelog, mainHost, runAdvanced);
+      const result: CleanJsResult = await cleanJsFile(file, relPath, changelog, mainHost, runAdvanced, macros);
       stats.jsFilesScanned++;
       if (result.isObfuscated) {
         obfuscatedFilesToDelete.add(file);
@@ -336,7 +336,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
 
     if (ext === '.css') {
-      const removed = await cleanCssFile(file, relPath, changelog);
+      const removed = await cleanCssFile(file, relPath, changelog, macros);
       stats.cssFilesScanned++;
       stats.cssItemsRemoved += removed;
     }

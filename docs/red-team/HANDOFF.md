@@ -20,7 +20,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **369 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **378 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (добавь `-- --advanced` для AST-анализа).
 - Проверка: `npm run verify -- <dir>` (теперь ИНТЕРАКТИВНАЯ — прокликивает).
@@ -109,7 +109,8 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 - **2A-3 ✅ ЗАКРЫТА** — `remove-tracker-links` через `classifyResource` (kind по `as`/rel; modulepreload+мульти-rel покрыты; preload/preconnect на неизвестный хост → карантин).
 - **2A-4 ✅ ЗАКРЫТА** — `<noscript>` разбирается `parseFragment` + allowlist (хирургично, fallback цел); практически закрывает DOM-3.
 - **CSS-1/CSS-2 ✅ ЗАКРЫТЫ** — `removeTrackerUrls` через `classifyResource`; новый проход `clean-inline-css` для `<style>`/`style=`.
-- **MAC-1/CSS-3/CJS-5** ⬅️ **следующая** (сканировать макросы во внешних `.js`/`.css`).
+- **MAC-1/CSS-3/CJS-5 ✅ ЗАКРЫТЫ** — `utils/macro-scan.ts` (`scanJsFileMacros`/`scanCssFileMacros`);
+  `cleanJsFile`/`cleanCssFile` сканируют внешние файлы и кладут макросы в общую карту. ⇒ **кластер C6 полностью закрыт.**
 
 **Средний/низкий (🟨/🟩) — по желанию:**
 - **OBF-1/MET-1 soundness** — точнее детект (идентификаторы/«полезность» по AST). Срочность СНИЖЕНА:
@@ -129,9 +130,11 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 ## Как начать новую сессию
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры).
-2. **Весь 🟧 (High) тир закрыт.** Кластер **C6** почти готов: 2A-3 ✅, 2A-4 ✅, CSS-1 ✅, CSS-2 ✅ —
-   остался **MAC-1/CSS-3/CJS-5** (сканировать макросы `{...}` во внешних `.js`/`.css`, не только inline-HTML).
-   Дальше — средний 🟨-приоритет (C7 regex-в-JS, SVG-1/2, OFFER-1/2/3, PIPE-3, и т.д. — см. реестр).
+2. **Весь 🟧 (High) тир + кластер C6 закрыты** (2A-3, 2A-4, CSS-1, CSS-2, MAC-1/CSS-3/CJS-5).
+   Дальше — средний 🟨-приоритет: **C7** (regex-в-JS: SW-1/EVAL-1/2, PARSE-1/2, CJS-3/4), **SVG-1/2**
+   (self-closing `<script>`, `javascript:`, `<style>` в SVG — явный вектор), **OFFER-1/2/3** (соцсети/
+   правовые ломаются в `{offer}`), **2D-2/2D-3** (обфускация в `on*`, мобильные события), PIPE-3, AL-4,
+   и формально-🟧 **POL-1** (CSP — гигиена). Полный список — в реестре `_index.md`.
 3. TDD → фикс → зелёные тесты + чистый tsc → обнови `_index.md` + per-file док → коммит на `redteam-fixes`.
 4. После пачки фиксов — прогон `npm run clean -- <copy> -- --advanced` и `npm run verify -- <copy>` на
    копии реального лендинга (без регресса).

@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import type { ChangelogEntry } from '../../types.js';
+import type { ChangelogEntry, MacroFinding } from '../../types.js';
+import { scanJsFileMacros } from '../../utils/macro-scan.js';
 import { removeServiceWorker } from './remove-service-worker.js';
 import { removeEvalObfuscation } from './remove-eval-obfuscation.js';
 import { warnSuspiciousPatterns } from './warn-suspicious-patterns.js';
@@ -27,11 +28,15 @@ export async function cleanJsFile(
   log: ChangelogEntry[],
   mainHost = '',
   runAdvanced = false,
+  macros?: MacroFinding[],
 ): Promise<CleanJsResult> {
   const original = await readFile(filePath, 'utf8');
   let content = original;
   let removed = 0;
   let detectorWarnings = 0;
+
+  // CJS-5/MAC-1: макросы во ВНЕШНЕМ .js (в строковых литералах) — в общую карту макросов.
+  if (macros) macros.push(...scanJsFileMacros(original, relPath));
 
   const sw = removeServiceWorker(content, relPath, log);
   content = sw.content;

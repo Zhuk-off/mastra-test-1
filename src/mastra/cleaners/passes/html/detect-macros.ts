@@ -1,42 +1,11 @@
 import type { DomPass } from '../../types.js';
 import type { Element } from 'domhandler';
-import * as walk from 'acorn-walk';
 import { isOwnMacro } from '../../registry/policy.js';
-import { parseJs } from '../js-advanced/ast/parse.js';
+import { MACRO_RE, cssUrlMacros, jsStringLiterals } from '../../utils/macro-scan.js';
 
-/** Токен макроса вида {something} (буквы/цифры/_/:/.-). */
-const MACRO_RE = /\{[a-zA-Z0-9_:.\-]+\}/g;
 const SCAN_ATTRS = new Set(['href', 'src', 'srcset', 'poster', 'content', 'action', 'formaction']);
 const IMG_ATTRS = new Set(['src', 'srcset', 'poster', 'data-src']);
 const SKIP_TEXT_PARENTS = new Set(['script', 'style', 'template', 'textarea', 'pre']);
-
-/** Извлекает макросы, встречающиеся ВНУТРИ url(...) в CSS (фон/изображения). */
-function cssUrlMacros(css: string): string[] {
-  const out: string[] = [];
-  const urlRe = /url\(\s*(['"]?)([^)'"]*)\1\s*\)/gi;
-  let m: RegExpExecArray | null;
-  while ((m = urlRe.exec(css)) !== null) {
-    const toks = (m[2] ?? '').match(MACRO_RE);
-    if (toks) out.push(...toks);
-  }
-  return out;
-}
-
-/** Извлекает строковые литералы из JS (через AST), чтобы искать макросы только в строках. */
-function jsStringLiterals(code: string, relPath: string): string[] | null {
-  const ast = parseJs(code, relPath);
-  if (!ast) return null;
-  const strings: string[] = [];
-  walk.simple(ast as never, {
-    Literal(node: { value?: unknown }) {
-      if (typeof node.value === 'string') strings.push(node.value);
-    },
-    TemplateLiteral(node: { quasis?: { value?: { cooked?: string | null; raw?: string } }[] }) {
-      for (const q of node.quasis ?? []) strings.push(q.value?.cooked ?? q.value?.raw ?? '');
-    },
-  });
-  return strings;
-}
 
 /**
  * Этап ОЧИСТКИ для макросов:
