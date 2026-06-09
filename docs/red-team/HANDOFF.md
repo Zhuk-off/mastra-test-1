@@ -20,7 +20,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **262 теста зелёных, 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **261 зелёный + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (добавь `-- --advanced` для AST-анализа).
 - Проверка: `npm run verify -- <dir>` (теперь ИНТЕРАКТИВНАЯ — прокликивает).
