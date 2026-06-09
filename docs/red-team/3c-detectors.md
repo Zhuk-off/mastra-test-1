@@ -171,7 +171,15 @@ KEY `onkeydown=`, DOC склейка/iframe.
 - **EUF-2 ✅ (заодно)** — внешние `.js` теперь получают и statement-level exfil-хирургию
   (`detectExfilCalls` → `neutralizeDetections` в `clean-js`), не только удаление целых pure-exfil функций.
   Тесты: `remove-inline-exfil.test.ts` (RED/KEY inline), `clean-js.test.ts` (RED/KEY внешние).
-- **DET-1** 🛠 — флагать нелитеральный сетевой URL как подозрительный — остаётся (FP-шум, взвесить).
-- **DET-1** — флагать нелитеральный сетевой URL (узкий вариант: atob/конкатенация с `//`/`http`),
-  чтобы не шуметь на легит `fetch(var)`. По решению владельца.
+- **DET-1 ✅ (узкий вариант по решению владельца)** — в `detect-exfil-calls` (fetch/WebSocket/`Image().src`)
+  и `detect-redirect` (`location.href=`/`assign`/`replace`) `extractStringArg` заменён на `extractStringish`:
+  склейка схемы по кускам (`'htt'+'ps://evil'`) и template-литералы (`` `https://evil/${x}` ``)
+  теперь РЕЗОЛВЯТСЯ и проходят `isExternalUrl` — тот же внешне-хостовый чек, что и для литерала (FP-профиль
+  не меняется). Плюс новый `obfuscatedDecoderIn` в `helpers.ts`: `atob`/`unescape`/`String.fromCharCode`
+  в аргументе URL → `shouldRemove:true` (нейтрализация, т.к. WARN-only детекции в `clean-js` сейчас
+  отбрасываются). Намеренно ИСКЛЮЧЕНЫ `decodeURIComponent`/`btoa` — иначе шум. Голая переменная
+  (`fetch(var)`, `fetch(apiBase+id)`), относительный путь и свой хост НЕ флагуются. `extractStringish`
+  заодно стал разворачивать template-литералы с подстановками (раньше — только без), что усилило и DOC-1
+  (FP-безопасно: если хост в подстановке — он пуст → не внешний). Тесты: `detector-computed-url.test.ts` (22).
+  **Остаток DET-2** (резолв алиасов `const f=fetch`, двухстрочный `var img=new Image();img.src=`) — отдельно.
 - **OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали (OBF-1/MET-1 → C5: карантин-вместо-delete).

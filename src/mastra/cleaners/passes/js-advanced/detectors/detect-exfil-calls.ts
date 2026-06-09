@@ -7,6 +7,7 @@ import {
   isExternalUrl,
   extractStringArg,
   extractStringish,
+  obfuscatedDecoderIn,
   findInjectedExternalResource,
   isGlobalCallee,
   isMethodCallee,
@@ -44,21 +45,25 @@ export function detectExfilCalls(
       const n = node as any;
       const { source, mainHost } = ctx;
       // new WebSocket('wss://external...') / new window.WebSocket(...)
+      // DET-1: extractStringish резолвит склейку/template ('ws'+'s://evil'); опасный
+      // декодер (atob/...) в аргументе → подозрительно даже без видимого URL.
       if (isGlobalCallee(n.callee, 'WebSocket')) {
-        const url = extractStringArg(n.arguments[0]);
-        if (
-          url &&
-          isExternalUrl(
-            url.replace('wss://', 'https://').replace('ws://', 'http://'),
-            mainHost,
-          )
-        ) {
+        const raw = extractStringish(n.arguments[0]);
+        const httpish = raw ? raw.replace('wss://', 'https://').replace('ws://', 'http://') : null;
+        let description: string | null = null;
+        if (raw && httpish && isExternalUrl(httpish, mainHost)) {
+          description = `WebSocket на внешний хост: ${raw}`;
+        } else {
+          const dec = obfuscatedDecoderIn(n.arguments[0]);
+          if (dec) description = `WebSocket с обфусцированным URL (${dec})`;
+        }
+        if (description) {
           results.push({
             line: posToLine(source, n.start),
             start: n.start,
             end: n.end,
             threatType: 'exfil-websocket',
-            description: `WebSocket на внешний хост: ${url}`,
+            description,
             snippet: snippetAt(source, n.start, n.end),
             shouldRemove: true,
             node,
@@ -72,15 +77,25 @@ export function detectExfilCalls(
       const { source, mainHost } = ctx;
 
       // fetch('https://external...') / window.fetch / window['fetch']
+      // DET-1: extractStringish резолвит склейку схемы по кускам ('htt'+'ps://evil') и
+      // template-литералы; опасный декодер (atob/unescape/fromCharCode) в аргументе →
+      // подозрительно даже без видимого URL. Голая переменная/относительный путь — нет.
       if (isGlobalCallee(n.callee, 'fetch')) {
-        const url = extractStringArg(n.arguments[0]);
+        const url = extractStringish(n.arguments[0]);
+        let description: string | null = null;
         if (url && isExternalUrl(url, mainHost)) {
+          description = `fetch() на внешний хост: ${url}`;
+        } else {
+          const dec = obfuscatedDecoderIn(n.arguments[0]);
+          if (dec) description = `fetch() с обфусцированным URL (${dec})`;
+        }
+        if (description) {
           results.push({
             line: posToLine(source, n.start),
             start: n.start,
             end: n.end,
             threatType: 'exfil-fetch',
-            description: `fetch() на внешний хост: ${url}`,
+            description,
             snippet: snippetAt(source, n.start, n.end),
             shouldRemove: true,
             node,
@@ -149,20 +164,28 @@ export function detectExfilCalls(
     AssignmentExpression(node: Node) {
       const n = node as any;
       // new Image().src = 'https://external.com/pixel'
+      // DET-1: extractStringish резолвит склейку/template; декодер в правой части → подозрительно.
       if (
         n.left?.type === 'MemberExpression' &&
         memberPropName(n.left) === 'src' &&
         n.left.object?.type === 'NewExpression' &&
         isGlobalCallee(n.left.object?.callee, 'Image')
       ) {
-        const url = extractStringArg(n.right);
+        const url = extractStringish(n.right);
+        let description: string | null = null;
         if (url && isExternalUrl(url, ctx.mainHost)) {
+          description = `Tracking pixel через new Image().src`;
+        } else {
+          const dec = obfuscatedDecoderIn(n.right);
+          if (dec) description = `Tracking pixel через new Image().src (обфусцированный URL: ${dec})`;
+        }
+        if (description) {
           results.push({
             line: posToLine(ctx.source, n.start),
             start: n.start,
             end: n.end,
             threatType: 'exfil-pixel',
-            description: `Tracking pixel через new Image().src`,
+            description,
             snippet: snippetAt(ctx.source, n.start, n.end),
             shouldRemove: true,
             node,

@@ -20,7 +20,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **274 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **296 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (добавь `-- --advanced` для AST-анализа).
 - Проверка: `npm run verify -- <dir>` (теперь ИНТЕРАКТИВНАЯ — прокликивает).
@@ -80,10 +80,11 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
   `classifyResource(href,'anchor')` для `a[href]`/`area[href]` и нейтрализует опасную схему
   (снимает только href, текст кнопки сохраняется, оригинал → карантин). Гейт — `dangerousSchemeOf()` в
   `allowlist.ts` (трогаем ТОЛЬКО схемы, не внешние хосты). Подключён перед `replaceOfferLinks`.
-- **DET-1** ⬅️ **следующая** — вычисляемый сетевой URL (`fetch(var)`, `fetch(atob(...))`, конкатенация) не детектится.
-  Сделать УЗКО (обфускация: `atob`/`unescape`/конкатенация со строкой, содержащей `//`/`http`), чтобы не
-  шуметь на легит `fetch(apiBase+id)`. Нелитеральный URL в exfil/redirect → подозрительно.
-- **DET-2 остаток** — алиасы (`const f=fetch; f(evil)`), 2-строчный `var img=new Image(); img.src=evil`,
+- **DET-1 ✅ ЗАКРЫТА** — `extractStringArg`→`extractStringish` в `detect-exfil-calls` (fetch/WebSocket/Image)
+  и `detect-redirect`: склейка схемы (`'htt'+'ps://evil'`) и template-литералы резолвятся и идут через
+  `isExternalUrl`. Новый `obfuscatedDecoderIn` (`helpers.ts`): `atob`/`unescape`/`String.fromCharCode` в
+  аргументе URL → нейтрализация. `decodeURIComponent`/`btoa` исключены; голая `fetch(var)` не шумит.
+- **DET-2 остаток** ⬅️ **следующая** — алиасы (`const f=fetch; f(evil)`), 2-строчный `var img=new Image(); img.src=evil`,
   `document.createElement('script').src=` — нужен лёгкий data-flow.
 - **AL-3 + CDN-1 + POL-2** — мультитенантные CDN: `cdn.jsdelivr.net/gh/<user>/<repo>`, `unpkg.com/<любой пакет>`
   доверены пословно по хосту → чужой код через trusted-хост. Нужен path-whitelist (только известные
@@ -119,7 +120,7 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 ## Как начать новую сессию
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры).
-2. Возьми верхнюю незакрытую 🟧-находку (2D-6 закрыта — начни с **DET-1**).
+2. Возьми верхнюю незакрытую 🟧-находку (2D-6 и DET-1 закрыты — начни с **DET-2 остаток**).
 3. TDD → фикс → зелёные тесты + чистый tsc → обнови `_index.md` + per-file док → коммит на `redteam-fixes`.
 4. После пачки фиксов — прогон `npm run clean -- <copy> -- --advanced` и `npm run verify -- <copy>` на
    копии реального лендинга (без регресса).

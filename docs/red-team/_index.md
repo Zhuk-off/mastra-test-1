@@ -157,7 +157,7 @@
 | EUF-2 | extract-useful-functions | 🟨 | Soundness | Внешние `.js`: режутся только целые функции, не рассыпанный exfil | ✅ |
 | EUF-3 | extract-useful-functions | 🟩 | Soundness | Консервативные пропуски (мульти-декл/arrow-expr); узкий DOM-список | 🆕 |
 | IDX-1 | js-advanced/index | 🟩 | Гигиена | Пустая заглушка (мёртвый плейсхолдер) | 🆕 |
-| DET-1 | detectors (общее) | 🟧 | Bypass | Детект только ЛИТЕРАЛЬНОЙ строки-URL → вычисляемый URL мимо | 🆕 |
+| DET-1 | detectors (общее) | 🟧 | Bypass | Детект только ЛИТЕРАЛЬНОЙ строки-URL → вычисляемый URL мимо | ✅ |
 | DET-2 | detectors (общее) | 🟧 | Bypass | Только прямой вызов точной формы → алиас/`window.fetch`/`img.src` мимо | 🛠 |
 | DET-3 | detectors (общее) | 🟨 | Bypass | `//host` обходит (new URL без базы); 3 копии isExternalUrl | ✅ |
 | DEC-1 | detect-exfil-calls | 🟨 | Robustness | Узел = CallExpression → `var x=fetch()` → `var x=;` (T-9) | ✅ |

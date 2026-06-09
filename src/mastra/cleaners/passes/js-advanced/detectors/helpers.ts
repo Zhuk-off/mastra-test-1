@@ -1,6 +1,7 @@
 /**
  * Общие помощники детекторов (раньше дублировались в exfil/redirect/docwrite).
  */
+import * as walk from 'acorn-walk';
 import { isTrustedHost } from '../../../registry/trusted-hosts.js';
 
 /**
@@ -120,14 +121,17 @@ export function extractStringArg(node: unknown): string | null {
 }
 
 /**
- * Собирает строку из литерала, template-литерала без подстановок ИЛИ конкатенации
- * строковых литералов (`'<scr' + 'ipt'`). Нелитеральные части дают '' — то есть
- * склейку чистых литералов разворачиваем, а вычисляемые части пропускаем (DOC-1).
+ * Собирает строку из литерала, template-литерала ИЛИ конкатенации строковых литералов
+ * (`'<scr' + 'ipt'`). Вычисляемые части (`${...}`-подстановки, нелитеральные операнды)
+ * пропускаются как '' — склейку чистых литералов разворачиваем, а динамику опускаем
+ * (DOC-1, DET-1). Достаточно, чтобы увидеть зашитый внешний префикс `https://evil/${x}`,
+ * и при этом FP-безопасно: если сам ХОСТ в подстановке (`//${host}/x`), хост пуст →
+ * `isExternalUrl` его не считает внешним.
  */
 export function extractStringish(node: any): string | null {
   if (!node) return null;
   if (node.type === 'Literal' && typeof node.value === 'string') return node.value;
-  if (node.type === 'TemplateLiteral' && node.expressions?.length === 0) {
+  if (node.type === 'TemplateLiteral') {
     return node.quasis.map((q: any) => q.value?.cooked ?? '').join('');
   }
   if (node.type === 'BinaryExpression' && node.operator === '+') {
@@ -137,6 +141,34 @@ export function extractStringish(node: any): string | null {
     return (l ?? '') + (r ?? '');
   }
   return null;
+}
+
+/**
+ * Ищет в выражении-аргументе ОБФУСЦИРУЮЩИЙ декодер: `atob(...)`, `unescape(...)`
+ * (вкл. `window.atob`/`self.atob`/`window['atob']`) или `String.fromCharCode(...)` /
+ * `String['fromCharCode']`. Это сигнал, что URL сетевого вызова СКРЫТ (DET-1, узкий
+ * вариант по решению владельца): напр. `fetch(atob('aHR0cHM6Ly9ldmls'))`.
+ *
+ * Намеренно ИСКЛЮЧЕНЫ легитимные `decodeURIComponent`/`decodeURI` (нормальный декод
+ * query-параметров) и `btoa` (кодер ИСХОДЯЩИХ данных, напр. `'/track?d='+btoa(x)`) —
+ * иначе шум на обычном коде. Возвращает имя декодера (для описания) либо null.
+ */
+export function obfuscatedDecoderIn(node: any): string | null {
+  if (!node || typeof node !== 'object') return null;
+  let found: string | null = null;
+  try {
+    walk.simple(node, {
+      CallExpression(n: any) {
+        if (found) return;
+        if (isGlobalCallee(n.callee, 'atob')) found = 'atob';
+        else if (isGlobalCallee(n.callee, 'unescape')) found = 'unescape';
+        else if (isMethodCallee(n.callee, 'String', 'fromCharCode')) found = 'String.fromCharCode';
+      },
+    });
+  } catch {
+    return null; // на непредвиденном узле не валим детектор (robustness)
+  }
+  return found;
 }
 
 /** Теги, инъекция которых через document.write/innerHTML тащит внешний ресурс. */
