@@ -59,6 +59,20 @@ function schemeOf(url: string): string | null {
 }
 
 /**
+ * Имя ОПАСНОЙ схемы URL (`javascript`/`vbscript`/`data`/`blob`/`filesystem`) в нижнем
+ * регистре — после браузерной нормализации (trim + вырезание \t\r\n) — либо null,
+ * если схема не опасна (http(s), относительный путь, `mailto:`/`tel:`/`#фрагмент` и т.п.).
+ *
+ * Нужна проходам, которым важно отличить «опасная схема» от «внешний хост»: напр.
+ * нейтрализация href у `<a>`/`<area>` (2D-6) касается ТОЛЬКО схем, а внешние http(s)-хосты
+ * остаются зоной offer-detector (иначе ломались бы легитимные внешние ссылки).
+ */
+export function dangerousSchemeOf(url: string): string | null {
+  const scheme = schemeOf(normalizeUrl(url));
+  return scheme && DANGEROUS_SCHEMES.has(scheme) ? scheme : null;
+}
+
+/**
  * Решение по опасной схеме с учётом типа ресурса.
  *
  * Эталон «что легитимно» — CSP владельца (policy.ts): `img-src data:` и

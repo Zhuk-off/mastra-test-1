@@ -10,6 +10,7 @@ function baseStats(over: Partial<CleanStats> = {}): CleanStats {
     localLibsReplaced: 0, eventAttrsRemoved: 0, svgFilesProcessed: 0, svgItemsRemoved: 0,
     jsFilesScanned: 0, jsItemsRemoved: 0, cssFilesScanned: 0, cssItemsRemoved: 0,
     externalDirsRemoved: 0, sourceMapsDeleted: 0, sourceMapRefsStripped: 0, offerLinksReplaced: 0,
+    dangerousHrefsNeutralized: 0,
     bytesBefore: 0, bytesAfter: 0, deadJsFilesRemoved: 0, partialJsCleaned: 0, inlineExfilRemoved: 0,
     unversionedLibsCdn: 0, metricFilesRemoved: 0, detectorWarnings: 0, obfuscatedFilesRemoved: 0,
     quarantinedItems: 0, macrosFlagged: 0, cspInjected: 0, phpBackdoorWarning: false,

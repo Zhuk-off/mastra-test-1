@@ -29,6 +29,7 @@ export function renderReport(
   L.push(`- картинок-пикселей удалено/в карантин: **${stats.imgPixelsRemoved}**`);
   L.push(`- <object>/<embed>/<frame> удалено: **${stats.objectEmbedsRemoved + stats.framesRemoved}**`);
   L.push(`- оффер-ссылок → {offer}: **${stats.offerLinksReplaced}**`);
+  L.push(`- опасных href нейтрализовано (<a>/<area>, javascript:/data:): **${stats.dangerousHrefsNeutralized}**`);
   L.push(`- CSP внедрён (файлов): **${stats.cspInjected}**`);
   L.push(`- JS-файлов: obfuscated удалено ${stats.obfuscatedFilesRemoved}, metric удалено ${stats.metricFilesRemoved}`);
   L.push(`- чужих макросов на ревью: **${stats.macrosFlagged}**`);

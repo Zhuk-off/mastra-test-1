@@ -105,8 +105,14 @@
   `quarantine` для `data:`/`blob:`/`javascript:`/`vbscript:`/`filesystem:` в script/iframe/media/
   stylesheet и `remove` для `javascript:`/`vbscript:` в `anchor`(href). Для **src** это уже работает
   end-to-end (проходы 2a зовут `classifyResource`).
-- **⚠️ Остаток → 2D-6 (🆕):** `<a href="javascript:/data:">` пока **не** проходит классификатор —
-  `replace-offer-links` зовёт только `looksLikeOfferUrl`, а не `classifyResource('anchor', …)`.
-  Политика в `allowlist.ts` готова и покрыта тестом (`anchor` → remove), но НУЖНА проводка прохода по
-  `<a href>` (вне scope C1 = только allowlist.ts). Заведено как **2D-6** в реестре.
+- **2D-6 ✅ (проводка прохода по `<a>`/`<area>`):** новый проход
+  [`strip-dangerous-hrefs.ts`](src/mastra/cleaners/passes/html/strip-dangerous-hrefs.ts) зовёт
+  `classifyResource(href,'anchor')` для `a[href]`/`area[href]` и **нейтрализует** опасную схему
+  (`javascript:`/`vbscript:`/`data:`/`blob:`/`filesystem:`): снимает ТОЛЬКО `href` (видимый текст
+  кнопки CTA сохраняется), оригинал кладёт в карантин (восстановимо + видно, какую кнопку привязать к
+  офферу). Под политику №1 (чужая навигация по клику = кража → действие, не WARN). Гейт — новый
+  `dangerousSchemeOf()` в `allowlist.ts`: трогаем ТОЛЬКО схемы, внешние http(s)-хосты остаются зоной
+  offer-detector (иначе ломались бы легитимные внешние ссылки, ср. OFFER-1). Подключён в `pipeline`
+  перед `replaceOfferLinks`; стат `dangerousHrefsNeutralized`; регресс-тесты —
+  `__tests__/strip-dangerous-hrefs.test.ts` (12) + интеграция в `dom-passes.test.ts`.
 - **2D-2 / 2D-3 / 2D-5** — НЕ трогали (это C4/харднинг по `on*`); остаются 🆕.

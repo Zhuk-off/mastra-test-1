@@ -48,6 +48,8 @@ export interface CleanStats {
   sourceMapsDeleted: number;
   sourceMapRefsStripped: number;
   offerLinksReplaced: number;
+  /** Навигационные href с опасной схемой (javascript:/data:/…) на <a>/<area>, у которых снят href (2D-6). */
+  dangerousHrefsNeutralized: number;
   bytesBefore: number;
   bytesAfter: number;
   normalize?: NormalizeStats;
@@ -145,6 +147,7 @@ export type HtmlStatsKey =
   | 'localLibsReplaced'
   | 'eventAttrsRemoved'
   | 'offerLinksReplaced'
+  | 'dangerousHrefsNeutralized'
   | 'inlineExfilRemoved'
   | 'cspInjected';
 

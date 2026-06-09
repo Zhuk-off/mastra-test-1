@@ -35,6 +35,7 @@ import { removeTrackerIframes } from './passes/html/remove-tracker-iframes.js';
 import { removeImgPixels } from './passes/html/remove-img-pixels.js';
 import { removeObjectEmbed } from './passes/html/remove-object-embed.js';
 import { removeFrames } from './passes/html/remove-frames.js';
+import { stripDangerousHrefs } from './passes/html/strip-dangerous-hrefs.js';
 import { replaceOfferLinks } from './passes/html/replace-offer-links.js';
 import { detectMacros } from './passes/html/detect-macros.js';
 import { stripEventAttrs } from './passes/html/strip-event-attrs.js';
@@ -60,6 +61,7 @@ const BASE_DOM_PASSES: DomPass[] = [
   removeImgPixels,           // allowlist <img src>
   removeObjectEmbed,
   removeFrames,
+  stripDangerousHrefs,       // <a>/<area> href с опасной схемой (javascript:/data:) → нейтрализация (2D-6)
   replaceOfferLinks,
   detectMacros,              // макросы: наши — оставить, чужие — нормализовать/в отчёт
   stripEventAttrs,
@@ -186,6 +188,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     sourceMapsDeleted: 0,
     sourceMapRefsStripped: 0,
     offerLinksReplaced: 0,
+    dangerousHrefsNeutralized: 0,
     bytesBefore: 0,
     bytesAfter: 0,
     deadJsFilesRemoved: 0,
@@ -300,6 +303,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
       stats.localLibsReplaced += counts.localLibsReplaced ?? 0;
       stats.eventAttrsRemoved += counts.eventAttrsRemoved ?? 0;
       stats.offerLinksReplaced += counts.offerLinksReplaced ?? 0;
+      stats.dangerousHrefsNeutralized += counts.dangerousHrefsNeutralized ?? 0;
       stats.inlineExfilRemoved += counts.inlineExfilRemoved ?? 0;
       stats.cspInjected += counts.cspInjected ?? 0;
       continue;

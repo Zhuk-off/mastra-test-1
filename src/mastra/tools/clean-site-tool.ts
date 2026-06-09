@@ -57,6 +57,7 @@ export const cleanSiteTool = createTool({
     sourceMapsDeleted: z.number(),
     sourceMapRefsStripped: z.number(),
     offerLinksReplaced: z.number(),
+    dangerousHrefsNeutralized: z.number(),
     localLibsReplaced: z.number(),
     bytesBefore: z.number(),
     bytesAfter: z.number(),

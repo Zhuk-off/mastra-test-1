@@ -20,7 +20,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **261 зелёный + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **274 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (добавь `-- --advanced` для AST-анализа).
 - Проверка: `npm run verify -- <dir>` (теперь ИНТЕРАКТИВНАЯ — прокликивает).
@@ -76,10 +76,11 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 ## Что осталось — приоритетный порядок для новой сессии
 
 **Высокий приоритет (🟧) — делать первыми:**
-- **2D-6** — `<a href="javascript:/data:">` всё ещё выживает (классификатор готов: `classifyResource(url,'anchor')`
-  возвращает remove/quarantine, но ни один проход не зовёт его для `<a>`). Подключить проход по `a[href]`
-  (расширить `replace-offer-links` или новый) → вырезать опасные схемы. Под политику №1.
-- **DET-1** — вычисляемый сетевой URL (`fetch(var)`, `fetch(atob(...))`, конкатенация) не детектится.
+- **2D-6 ✅ ЗАКРЫТА** — новый проход `passes/html/strip-dangerous-hrefs.ts` зовёт
+  `classifyResource(href,'anchor')` для `a[href]`/`area[href]` и нейтрализует опасную схему
+  (снимает только href, текст кнопки сохраняется, оригинал → карантин). Гейт — `dangerousSchemeOf()` в
+  `allowlist.ts` (трогаем ТОЛЬКО схемы, не внешние хосты). Подключён перед `replaceOfferLinks`.
+- **DET-1** ⬅️ **следующая** — вычисляемый сетевой URL (`fetch(var)`, `fetch(atob(...))`, конкатенация) не детектится.
   Сделать УЗКО (обфускация: `atob`/`unescape`/конкатенация со строкой, содержащей `//`/`http`), чтобы не
   шуметь на легит `fetch(apiBase+id)`. Нелитеральный URL в exfil/redirect → подозрительно.
 - **DET-2 остаток** — алиасы (`const f=fetch; f(evil)`), 2-строчный `var img=new Image(); img.src=evil`,
@@ -118,7 +119,7 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 ## Как начать новую сессию
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры).
-2. Возьми верхнюю незакрытую 🟧-находку (начни с **2D-6**).
+2. Возьми верхнюю незакрытую 🟧-находку (2D-6 закрыта — начни с **DET-1**).
 3. TDD → фикс → зелёные тесты + чистый tsc → обнови `_index.md` + per-file док → коммит на `redteam-fixes`.
 4. После пачки фиксов — прогон `npm run clean -- <copy> -- --advanced` и `npm run verify -- <copy>` на
    копии реального лендинга (без регресса).
