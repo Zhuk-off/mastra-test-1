@@ -137,3 +137,14 @@
    только внешние файлы).
 3. **SVG-1 + SVG-2** — закрыть формы (self-closing script, неквотированные `on*`, plain `href`,
    `javascript:`) — SVG это твой явный вектор «там прячут JS».
+
+---
+
+## ✅ Статус фиксов (C3б)
+
+- **EXT-1 ✅** — `removeTrackerExternals` решает судьбу `_external/<host>/` по `classifyResource`
+  (`https://<host>/`, kind `script` — строжайший trust-set): доверенный CDN → оставить; известный
+  трекер → удалить; **прочий чужой хост → карантин** (`quarantineDir` переносит в
+  `_quarantine/_external/<host>/`, не оставляя локально и не уничтожая). Раньше — голый блок-лист,
+  неизвестный чужой хост выживал. Тест: `passes/fs/__tests__/remove-tracker-externals.test.ts`.
+- **CSS-1/2/3, SVG-1/2, PHP-1, SM-1** — не трогали (отдельные находки).

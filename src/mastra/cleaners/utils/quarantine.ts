@@ -3,8 +3,8 @@
  * выносим человеку в отчёт. Удаляем с живой страницы (она становится безопасной),
  * но сохраняем оригинал (можно восстановить, если ложное срабатывание).
  */
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
+import { join, relative, dirname } from 'node:path';
 import type { CheerioAPI } from 'cheerio';
 import type { Element } from 'domhandler';
 import type { PassContext, QuarantineItem } from '../types.js';
@@ -63,6 +63,31 @@ export async function quarantineFile(
     snippet,
     file: relative(siteDir, absPath).replace(/\\/g, '/'),
   });
+}
+
+/**
+ * Перемещает ДИРЕКТОРИЮ в `_quarantine/<relInside>` (сохранение, не удаление) и пишет
+ * запись в карантин. Для `_external/<host>` чужого хоста вне белого списка (EXT-1):
+ * убираем с деплоя, но не уничтожаем. Возвращает true, если перенос удался.
+ */
+export async function quarantineDir(
+  siteDir: string,
+  absDir: string,
+  relInside: string,
+  quarantine: QuarantineItem[],
+  kind: string,
+  reason: string,
+): Promise<boolean> {
+  const dest = join(siteDir, '_quarantine', relInside);
+  try {
+    await mkdir(dirname(dest), { recursive: true });
+    await rename(absDir, dest);
+  } catch {
+    return false;
+  }
+  const rel = relInside.replace(/\\/g, '/');
+  quarantine.push({ kind, reason, snippet: `Директория перемещена в _quarantine/${rel}/`, file: rel });
+  return true;
 }
 
 /** Сбрасывает карантин на диск: _quarantine/NNN-<kind>.txt + INDEX.md. */

@@ -373,8 +373,8 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
   }
 
-  // Удаляем папки _external/<tracker-host>/
-  stats.externalDirsRemoved = await removeTrackerExternals(siteDir);
+  // Папки _external/<host>/ — через белый список (трекер→удалить, чужой→карантин). EXT-1.
+  stats.externalDirsRemoved = await removeTrackerExternals(siteDir, quarantine);
 
   // Удаляем source maps
   const { mapsDeleted, filesStripped } = await removeSourceMaps(siteDir);

@@ -175,7 +175,7 @@
 | VIS-2 | verify-visual | 🟨 | Robustness | Диф только вьюпорта (fullPage:false) — оффер ниже мимо | 🆕 |
 | VIS-3 | verify-visual | 🟨 | Robustness | Скриншот без блока внешних → редирект/exfil искажает диф | 🆕 |
 | VIS-1 | verify-visual | 🟩 | Гигиена | Не подключён в авто-очистку (утилита) | 🆕 |
-| EXT-1 | remove-tracker-externals | 🟧 | Bypass | `_external/` ломает «relative=keep»: чужой хост выживает локально | 🆕 |
+| EXT-1 | remove-tracker-externals | 🟧 | Bypass | `_external/` ломает «relative=keep»: чужой хост выживает локально | ✅ |
 | EXT-2 | remove-tracker-externals | 🟩 | Robustness | Висячие ссылки после удаления `_external/` | 🆕 |
 | CSS-1 | remove-tracker-urls | 🟨 | Bypass | CSS `url()` — блок-лист; неизвестный внешний ресурс остаётся | 🆕 |
 | CSS-2 | css (inline) | 🟨 | Bypass | Inline `<style>`/`style=` не чистятся от трекер-url() | 🆕 |
