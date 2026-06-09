@@ -148,12 +148,15 @@ KEY `onkeydown=`, DOC склейка/iframe.
   если вызов — самостоятельный statement, убираем целиком; иначе (`var x = fetch()`, `a && fetch()`,
   `foo(fetch())`) нейтрализуем подстановкой `void 0` (синтаксис сохраняется, остальной inline-код не
   рушится). Родитель узла определяется через `walk.ancestor`. Тесты: `remove-inline-exfil.test.ts`.
-- **DET-2 🛠 (member/bracket готово)** — добавлены `isGlobalCallee`/`isMethodCallee`/`memberPropName`
-  в `helpers.ts`; `detect-exfil-calls` ловит `window.fetch`/`self.fetch`/`window['fetch']`,
+- **DET-2 ✅ (member/bracket + лёгкий data-flow)** — добавлены `isGlobalCallee`/`isMethodCallee`/
+  `memberPropName` в `helpers.ts`; `detect-exfil-calls` ловит `window.fetch`/`self.fetch`/`window['fetch']`,
   `navigator['sendBeacon']`, `document['write']`/`writeln`, `new window.WebSocket`, `new window.Image().src`.
-  Тесты: `detector-indirection.test.ts`. **Остаток DET-2:** резолв алиасов (`const f=fetch; f()`),
-  двухстрочный `var img=new Image(); img.src=evil`, `document.createElement('script').src=` — нужен
-  лёгкий data-flow, отдельно.
+  **Остаток DET-2 закрыт:** `collectExfilBindings` (пре-пасс) резолвит простые алиасы
+  (`const f=fetch; f(evil)`, `var WS=WebSocket; new WS(...)` через `referencedGlobalName`) и переменные-стоки
+  (`var img=new Image()` / `var s=document.createElement('script'|'img')`); `srcAssignmentKind` ловит
+  `<sink>.src=url` в двухстрочной И инлайн (`createElement('script').src=`) форме. Новый threatType
+  `exfil-script-src` (динамический внешний `<script>`). Судьбу всё равно решает внешний/обфусцированный URL
+  (DET-1) → FP ничтожен; областей видимости не трекаем (достаточно). Тесты: `detector-dataflow.test.ts` (16).
 - **DEC-2 ✅** — трекер-вызов (`fbq`/`ga`/`hj`/…) НЕ флагается, если имя объявлено локально в файле
   (function/var/let/const/параметр) — это собственная функция сайта (`ga()` = get attribute), а не
   внешний глобал. `collectLocalBindings` в `detect-exfil-calls`. Необъявленный `ga('send',…)` (внешний

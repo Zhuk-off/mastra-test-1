@@ -63,6 +63,22 @@ export function isGlobalCallee(callee: any, fnName: string): boolean {
 }
 
 /**
+ * Имя глобала, на который ССЫЛАЕТСЯ выражение (не вызов): `fetch` → 'fetch',
+ * `window.fetch`/`self.WebSocket` → 'fetch'/'WebSocket'. Нужно для резолва простых
+ * алиасов (`const f = fetch; f(evil)` — DET-2): по init-выражению определяем, какой
+ * глобал присвоен переменной. Возвращает имя либо null.
+ */
+export function referencedGlobalName(node: any): string | null {
+  if (!node) return null;
+  if (node.type === 'Identifier') return node.name ?? null;
+  if (node.type === 'MemberExpression') {
+    const obj = node.object;
+    if (obj?.type === 'Identifier' && GLOBAL_OBJECTS.has(obj.name)) return memberPropName(node);
+  }
+  return null;
+}
+
+/**
  * callee вызывает метод `objName.method`: `navigator.sendBeacon`,
  * `navigator['sendBeacon']`, `document.write`, `document['write']`, а также через
  * глобал (`window.navigator.sendBeacon`, `window.document.write`).

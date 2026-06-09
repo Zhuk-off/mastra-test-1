@@ -20,7 +20,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **296 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **312 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (добавь `-- --advanced` для AST-анализа).
 - Проверка: `npm run verify -- <dir>` (теперь ИНТЕРАКТИВНАЯ — прокликивает).
@@ -84,9 +84,11 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
   и `detect-redirect`: склейка схемы (`'htt'+'ps://evil'`) и template-литералы резолвятся и идут через
   `isExternalUrl`. Новый `obfuscatedDecoderIn` (`helpers.ts`): `atob`/`unescape`/`String.fromCharCode` в
   аргументе URL → нейтрализация. `decodeURIComponent`/`btoa` исключены; голая `fetch(var)` не шумит.
-- **DET-2 остаток** ⬅️ **следующая** — алиасы (`const f=fetch; f(evil)`), 2-строчный `var img=new Image(); img.src=evil`,
-  `document.createElement('script').src=` — нужен лёгкий data-flow.
-- **AL-3 + CDN-1 + POL-2** — мультитенантные CDN: `cdn.jsdelivr.net/gh/<user>/<repo>`, `unpkg.com/<любой пакет>`
+- **DET-2 ✅ ЗАКРЫТА** — `collectExfilBindings` (пре-пасс в `detect-exfil-calls`) резолвит алиасы
+  (`const f=fetch; f(evil)` через `referencedGlobalName`) и переменные-стоки (`var img=new Image()`,
+  `document.createElement('script'|'img')`); `srcAssignmentKind` ловит `<sink>.src=` в 2-строчной и инлайн
+  форме. Новый threatType `exfil-script-src`. FP-гейт — внешний/обфусцированный URL (DET-1).
+- **AL-3 + CDN-1 + POL-2** ⬅️ **следующая** — мультитенантные CDN: `cdn.jsdelivr.net/gh/<user>/<repo>`, `unpkg.com/<любой пакет>`
   доверены пословно по хосту → чужой код через trusted-хост. Нужен path-whitelist (только известные
   пакеты/либы), `/gh/` и произвольный npm → quarantine. Согласовать с `cdn-detector` (репин).
 - **NORM-3** — неполный сбор ссылок (lazy-load `data-src`, `poster`, `@import`, `<use href>`,
@@ -120,7 +122,7 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 ## Как начать новую сессию
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры).
-2. Возьми верхнюю незакрытую 🟧-находку (2D-6 и DET-1 закрыты — начни с **DET-2 остаток**).
+2. Возьми верхнюю незакрытую 🟧-находку (2D-6, DET-1, DET-2 закрыты — начни с **AL-3/CDN-1/POL-2**).
 3. TDD → фикс → зелёные тесты + чистый tsc → обнови `_index.md` + per-file док → коммит на `redteam-fixes`.
 4. После пачки фиксов — прогон `npm run clean -- <copy> -- --advanced` и `npm run verify -- <copy>` на
    копии реального лендинга (без регресса).
