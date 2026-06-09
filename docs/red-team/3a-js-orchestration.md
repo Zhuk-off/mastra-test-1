@@ -148,3 +148,14 @@ CJS-3 (непарсимый JS → флаг, не тишина), EVAL-2/SW-1 (re
    `detectDocWriteScript` режет по смещённым позициям.
 2. **CJS-3 + CJS-4** — не глушить AST-анализ молча; regex-правки не должны ломать парс.
 3. **CJS-2** — обфусцированный файл в карантин, а не `unlink` по эвристике.
+
+---
+
+## ✅ Статус фиксов (C5)
+
+- **CJS-1 ✅** — `clean-js` перепарсивает AST после `extractUsefulFunctions` (если что-то вырезано):
+  `let ast`, `ast = parseJs(content)`, а keylogger/redirect/docWrite вынесены во второй `if (ast)` на
+  актуальном дереве. Раньше старые позиции на укоротившемся `content` давали порчу файла /
+  `MagicString: Character is out of bounds` (краш). Тест: `passes/js/__tests__/clean-js.test.ts`.
+- **CJS-2 / OBF-1 / MET-1** 🛠 — карантин-вместо-`unlink` для obfuscated/metric (C5б) — следующий шаг.
+- **CJS-3, CJS-4** — не трогали (не глушить AST молча; regex не должен ломать парс) — отдельно.

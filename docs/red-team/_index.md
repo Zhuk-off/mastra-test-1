@@ -138,7 +138,7 @@
 | 2D-4 | inject-csp | 🟩 | Robustness | Размещение ок (T-4); но SKIP_DOM-файлы без CSP (← PIPE-1) | 🆕 |
 | 2D-5 | remove-inline-exfil-pass | 🟨 | Граница | Непарсимый inline-script молча пропущен; detect — Тир 3 | 🆕 |
 | 2D-6 | replace-offer-links / new pass | 🟧 | Bypass | `<a href="javascript:/data:">` не проходит `classifyResource` → выживает (остаток C1: классификатор готов, проход не подключён) | 🆕 |
-| CJS-1 | clean-js | 🟧 | Correctness | Устаревший AST: docWrite режет по смещённым позициям после extract | 🆕 |
+| CJS-1 | clean-js | 🟧 | Correctness | Устаревший AST: docWrite режет по смещённым позициям после extract | ✅ |
 | CJS-2 | clean-js | 🟨 | Robustness | `detectObfuscation` удаляет весь файл (без карантина) — FP на минифик. либе | 🆕 |
 | CJS-3 | clean-js | 🟨 | Robustness | Парс не удался → все AST-детекторы молча пропущены | 🆕 |
 | CJS-4 | clean-js | 🟨 | Robustness | regex SW/eval ломает JS → каскадом глушит AST | 🆕 |

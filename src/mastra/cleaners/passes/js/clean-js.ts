@@ -54,7 +54,7 @@ export async function cleanJsFile(
       return { removed: 0, partialCleaned: false, isMetricFile: false, isObfuscated: true, detectorWarnings: 0 };
     }
 
-    const ast = parseJs(content, relPath);
+    let ast = parseJs(content, relPath);
     if (ast) {
       const check = detectMetricFile(ast, content);
       if (check.isMetricFile) {
@@ -73,8 +73,15 @@ export async function cleanJsFile(
       if (extracted.removed > 0) {
         content = extracted.code;
         removed += extracted.removed;
+        // CJS-1: content мутировал → позиции старого AST невалидны. Перепарсим,
+        // иначе detectDocWriteScript режет MagicString по смещённым позициям
+        // (порча файла или "Character is out of bounds").
+        ast = parseJs(content, relPath);
       }
+    }
 
+    // keylogger/redirect/docWrite — на АКТУАЛЬНОМ ast (после возможной мутации extractUsefulFunctions)
+    if (ast) {
       // Stage 7: detect keylogger — WARN only
       const keyloggerResults = detectKeylogger(ast, content);
       for (const r of keyloggerResults) {
