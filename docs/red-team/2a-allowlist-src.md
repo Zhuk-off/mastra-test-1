@@ -133,5 +133,10 @@
   preconnect → карантин (раньше keep — а preload СКАЧИВАЕТ ресурс). Мульти-значный `rel` и
   `modulepreload` теперь покрыты. Прочие rel (icon/canonical/manifest) не трогаем. Тесты:
   `remove-tracker-links.test.ts` (11).
-- **2A-4 / 2A-5** — НЕ трогали (2A-4: вложенный парс `<noscript>` + allowlist — следующая в C6);
-  остаются 🆕.
+- **2A-4 ✅** — `remove-noscript-trackers` больше не блок-лист: содержимое `<noscript>` (которое внешний
+  парсер держит текстом) разбирается вложенным `parseFragment` (новые `parseFragment`/`serializeFragment`
+  в `html-dom.ts`), и `script[src]`/`iframe[src]`/`img[src]` внутри идут через `classifyResource`. Опасные/
+  чужие узлы вырезаются ХИРУРГИЧНО (через `quarantineNode`), легитимный fallback (текст, локальный/trusted
+  `<img>`) сохраняется; пустой noscript удаляется. Неизвестный пиксель/iframe в noscript теперь ловится
+  (практически закрывает и DOM-3). Тесты: `remove-noscript-trackers.test.ts` (6).
+- **2A-5** — НЕ трогали (граница: AST-защита от inline-exfil — это 2d); остаётся 🆕.

@@ -60,3 +60,17 @@ export function parseHtml(html: string): Dom {
 export function serializeHtml($: Dom): string {
   return $.html();
 }
+
+/**
+ * Парсит HTML-ФРАГМЕНТ (без обёртки html/head/body). Нужно для содержимого `<noscript>`,
+ * которое внешний парсер (scriptingEnabled) держит как текст: чтобы прогнать allowlist по
+ * вложенным `<img>`/`<iframe>`/`<script>`, текст разбираем отдельным фрагментным cheerio (2A-4).
+ */
+export function parseFragment(html: string): Dom {
+  return cheerio.load(html, undefined, false);
+}
+
+/** Сериализует фрагмент обратно в строку (после хирургии над вложенными узлами). */
+export function serializeFragment($: Dom): string {
+  return $.root().html() ?? '';
+}
