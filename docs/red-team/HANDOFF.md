@@ -20,7 +20,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **342 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **353 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (добавь `-- --advanced` для AST-анализа).
 - Проверка: `npm run verify -- <dir>` (теперь ИНТЕРАКТИВНАЯ — прокликивает).
@@ -106,8 +106,8 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
   ⇒ **Весь 🟧 (High) тир закрыт.** Дальше — 🟨 (C6 и средний приоритет).
 
 **C6 — «блок-лист → белый список» (FN-карманы, средний приоритет):**
-- **2A-3** (preconnect/preload через `classifyResource` по `as`/rel + modulepreload + мульти-`rel`),
-  **2A-4** (`<noscript>` — парсить содержимое вложенным cheerio и гнать allowlist, не блок-лист),
+- **2A-3 ✅ ЗАКРЫТА** — `remove-tracker-links` через `classifyResource` (kind по `as`/rel; modulepreload+мульти-rel покрыты; preload/preconnect на неизвестный хост → карантин).
+- **2A-4** ⬅️ **следующая** (`<noscript>` — парсить содержимое вложенным cheerio и гнать allowlist, не блок-лист),
   **CSS-1/CSS-2** (CSS `url()` и inline `<style>`/`style=` через allowlist),
   **MAC-1/CSS-3/CJS-5** (сканировать макросы во внешних `.js`/`.css`).
 
@@ -129,8 +129,8 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 ## Как начать новую сессию
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры).
-2. **Весь 🟧 (High) тир закрыт** (2D-6, DET-1, DET-2, AL-3/CDN-1/POL-2, NORM-3, URL-1, UCDN-1/2, COV-1/ANA-1).
-   Дальше — кластер **C6** (блок-лист→белый список: 2A-3/2A-4/CSS-1/CSS-2/MAC-1) и средний 🟨-приоритет.
+2. **Весь 🟧 (High) тир закрыт.** Идёт кластер **C6** (блок-лист→белый список): 2A-3 ✅ закрыта —
+   начни с **2A-4** (`<noscript>`), затем CSS-1/CSS-2 (CSS `url()`/inline), MAC-1/CSS-3/CJS-5 (макросы во внешних файлах).
 3. TDD → фикс → зелёные тесты + чистый tsc → обнови `_index.md` + per-file док → коммит на `redteam-fixes`.
 4. После пачки фиксов — прогон `npm run clean -- <copy> -- --advanced` и `npm run verify -- <copy>` на
    копии реального лендинга (без регресса).

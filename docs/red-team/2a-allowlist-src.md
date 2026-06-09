@@ -126,5 +126,12 @@
   whitespace-обход закрыт. Фикс централизован в `allowlist.ts` (см. [allowlist.md](allowlist.md)).
 - **2A-2 ✅** — `data:`/`javascript:`/`blob:` в `<script>`/`<iframe>` src → теперь `quarantine`
   (классификация схемы в `allowlist.ts`); проходят через те же `classifyResource`-вызовы 2a.
-- **2A-3 / 2A-4 / 2A-5** — НЕ трогали (это C6: применить allowlist к preconnect/preload и `<noscript>`);
+- **2A-3 ✅** — `remove-tracker-links` переписан на белый список: все ресурс-несущие `rel`
+  (stylesheet / preload / modulepreload / prefetch / preconnect / dns-prefetch) идут через
+  `classifyResource` (kind по `as`: style→stylesheet, image→img, video/audio→media, font→stylesheet,
+  иначе→script; modulepreload→script; preconnect/dns-prefetch→preconnect). Неизвестный хост preload/
+  preconnect → карантин (раньше keep — а preload СКАЧИВАЕТ ресурс). Мульти-значный `rel` и
+  `modulepreload` теперь покрыты. Прочие rel (icon/canonical/manifest) не трогаем. Тесты:
+  `remove-tracker-links.test.ts` (11).
+- **2A-4 / 2A-5** — НЕ трогали (2A-4: вложенный парс `<noscript>` + allowlist — следующая в C6);
   остаются 🆕.

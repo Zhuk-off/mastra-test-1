@@ -115,7 +115,7 @@
 | RLL-3 | replace-local-libs…ts | 🟨 | Архитектура | Полное доверие карте до allowlist — материализует CDN-1 | 🆕 |
 | 2A-1 | remove-tracker-{scripts,iframes},img-pixels | 🟧 | Bypass | URL не нормализуется → whitespace-обход (AL-2, подтверждён) | ✅ |
 | 2A-2 | remove-tracker-{scripts,iframes} | 🟧 | Bypass | `data:`/`javascript:` в src → keep (AL-1, в 2a не ловится) | ✅ |
-| 2A-3 | remove-tracker-links | 🟨 | Bypass | preconnect/preload — блок-лист; modulepreload/мульти-rel мимо | 🆕 |
+| 2A-3 | remove-tracker-links | 🟨 | Bypass | preconnect/preload — блок-лист; modulepreload/мульти-rel мимо | ✅ |
 | 2A-4 | remove-noscript-trackers | 🟨 | Bypass | `<noscript>` allowlist-слеп: блок-лист → неизвестное выживает | 🆕 |
 | 2A-5 | remove-inline-trackers | 🟨 | Soundness | Только вендор-сниппеты; кастомный inline-exfil не здесь (→2d) | 🆕 |
 | 2B-1 | remove-base | 🟨 | Robustness | `<base>` вырезается вслепую + normalize base-неосведомлён → битые пути | 🆕 |
