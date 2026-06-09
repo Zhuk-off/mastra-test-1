@@ -164,8 +164,8 @@
 | DEC-2 | detect-exfil-calls | 🟨 | Soundness | Короткие `ga`/`hj`/`zE` → FP-удаление своей функции | ✅ |
 | OBF-1 | detect-obfuscation | 🟨 | Soundness | 3 узкие сигнатуры: FN + FP-delete легит-минификата | 🆕 |
 | MET-1 | detect-metric-file | 🟨 | Soundness | «Полезный код» = 5 подстрок → FP-delete файла с логикой | 🆕 |
-| RED-1 | detect-redirect | 🟨 | Policy/FN | Редирект только WARN; `assign`/`top`/косвенность мимо | 🆕 |
-| KEY-1 | detect-keylogger | 🟨 | Policy/FN | Keylogger только WARN; `onkeydown=`-присваивание мимо | 🆕 |
+| RED-1 | detect-redirect | 🟨 | Policy/FN | Редирект только WARN; `assign`/`top`/косвенность мимо | 🛠 |
+| KEY-1 | detect-keylogger | 🟨 | Policy/FN | Keylogger только WARN; `onkeydown=`-присваивание мимо | 🛠 |
 | DOC-1 | detect-document-write-script | 🟨 | Soundness | Только литерал + `<script src>`; склейка/iframe/img мимо | ✅ |
 | COV-1 | collect/analyze-coverage | 🟧 | Robustness | Coverage удаляет интерактивный/утилитный JS как «мёртвый» | 🆕 |
 | ANA-1 | analyze-coverage | 🟨 | Robustness | Непарсимый кандидат → «мёртвый» → удаление | 🆕 |

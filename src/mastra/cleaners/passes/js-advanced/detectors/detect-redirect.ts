@@ -2,7 +2,7 @@ import * as walk from 'acorn-walk';
 import type { Program, Node } from 'acorn';
 import type { DetectionResult, DetectorContext } from '../ast/types.js';
 import { posToLine, snippetAt } from '../ast/parse.js';
-import { isExternalUrl, extractStringArg } from './helpers.js';
+import { isExternalUrl, extractStringArg, isLocationRef, memberPropName } from './helpers.js';
 
 /**
  * Detects JS redirects to external URLs.
@@ -24,21 +24,14 @@ export function detectRedirect(ast: Program, ctx: DetectorContext): DetectionRes
       const n = node as any;
       const left = n.left;
 
-      if (left?.type !== 'MemberExpression') return;
-
-      const obj = left.object;
-      const prop = left.property?.name as string | undefined;
-
-      // window.location = '...' or location.href = '...' or window.location.href = '...'
-      const isLocationAssign =
-        (obj?.name === 'location' && (prop === 'href' || prop === 'replace')) ||
-        (obj?.type === 'MemberExpression' &&
-          obj.object?.name === 'window' &&
-          obj.property?.name === 'location' &&
-          (prop === 'href' || prop === 'replace')) ||
-        (obj?.name === 'window' && prop === 'location');
-
-      if (!isLocationAssign) return;
+      // location = url | window.location = url | location.href = url | location['href'] = url
+      // | top.location.href = url | self.location = url
+      const isBareLocation = isLocationRef(left);
+      const isHrefAssign =
+        left?.type === 'MemberExpression' &&
+        memberPropName(left) === 'href' &&
+        isLocationRef(left.object);
+      if (!isBareLocation && !isHrefAssign) return;
 
       const url = extractStringArg(n.right);
       if (!url || !isExternalUrl(url, mainHost)) return;
@@ -57,19 +50,12 @@ export function detectRedirect(ast: Program, ctx: DetectorContext): DetectionRes
 
     CallExpression(node: Node) {
       const n = node as any;
-      // location.replace('https://...') or window.location.replace('https://...')
+      // location.assign/replace(url) — в т.ч. window/top/self.location и bracket-формы
       const callee = n.callee;
       if (callee?.type !== 'MemberExpression') return;
-      if (callee.property?.name !== 'replace') return;
-
-      const obj = callee.object;
-      const isLocationReplace =
-        obj?.name === 'location' ||
-        (obj?.type === 'MemberExpression' &&
-          obj.object?.name === 'window' &&
-          obj.property?.name === 'location');
-
-      if (!isLocationReplace) return;
+      const method = memberPropName(callee);
+      if (method !== 'assign' && method !== 'replace') return;
+      if (!isLocationRef(callee.object)) return;
 
       const url = extractStringArg(n.arguments[0]);
       if (!url || !isExternalUrl(url, mainHost)) return;
@@ -79,7 +65,7 @@ export function detectRedirect(ast: Program, ctx: DetectorContext): DetectionRes
         start: n.start,
         end: n.end,
         threatType: 'redirect',
-        description: `Редирект на внешний хост через location.replace(): ${url}`,
+        description: `Редирект на внешний хост через location.${method}(): ${url}`,
         snippet: snippetAt(source, n.start, n.end),
         shouldRemove: false,
         node,

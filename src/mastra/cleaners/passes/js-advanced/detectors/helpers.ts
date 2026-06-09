@@ -82,6 +82,30 @@ export function isMethodCallee(callee: any, objName: string, method: string): bo
   return false;
 }
 
+/** Объекты, держащие `location` (для детекта редиректов, RED-1). */
+const LOCATION_HOLDERS = new Set(['window', 'self', 'top', 'parent', 'globalThis', 'document']);
+
+/**
+ * Узел ссылается на объект `location`: `location`, `window.location`, `top.location`,
+ * `self.location`, `parent.location`, `document.location`, `window.top.location`,
+ * включая bracket-формы. Закрывает RED-1 (раньше — только `location`/`window.location`).
+ */
+export function isLocationRef(node: any): boolean {
+  if (!node) return false;
+  if (node.type === 'Identifier') return node.name === 'location';
+  if (node.type === 'MemberExpression') {
+    if (memberPropName(node) !== 'location') return false;
+    const obj = node.object;
+    if (obj?.type === 'Identifier') return LOCATION_HOLDERS.has(obj.name);
+    // window.top.location / window.self.location
+    if (obj?.type === 'MemberExpression' && obj.object?.type === 'Identifier') {
+      const inner = memberPropName(obj);
+      return LOCATION_HOLDERS.has(obj.object.name) && (inner === 'top' || inner === 'self' || inner === 'parent');
+    }
+  }
+  return false;
+}
+
 /** Строковое значение узла-аргумента, если это строковый литерал; иначе null. */
 export function extractStringArg(node: unknown): string | null {
   if (

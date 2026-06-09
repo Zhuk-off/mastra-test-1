@@ -166,8 +166,14 @@ KEY `onkeydown=`, DOC склейка/iframe.
   (а не только script) и разворачивает склейку строк (`'<scr'+'ipt'`) и template-литералы без подстановок
   (`extractStringish` + `findInjectedExternalResource` в `helpers.ts`, обе ветки docwrite). Тесты:
   `detector-docwrite.test.ts`.
-- **DET-1** — флагать нелитеральный сетевой URL (узкий вариант: atob/конкатенация с `//` или `http`),
+- **RED-1 🛠 (покрытие расширено, WARN)** — `detect-redirect` теперь ловит `location.assign(...)`,
+  `top/self/parent.location`, `window.top.location`, bracket `location['href']=`, bare `location='...'`
+  (helpers `isLocationRef`/`memberPropName`). Осталось ПОЛИТИЧЕСКОЕ решение: эскалировать WARN→карантин/
+  удаление (риск задеть легит партнёрский редирект) — за владельцем; сейчас сохранён WARN.
+- **KEY-1 🛠 (покрытие расширено, WARN)** — `detect-keylogger` ловит присваивание on*-свойств
+  (`document.onkeydown = e => fetch(...)`, `el.onkeyup = ...`) с сетевым вызовом, не только
+  `addEventListener`. Эскалация WARN→действие — за владельцем.
+  Тесты RED/KEY: `detector-redirect-keylogger.test.ts`.
+- **DET-1** — флагать нелитеральный сетевой URL (узкий вариант: atob/конкатенация с `//`/`http`),
   чтобы не шуметь на легит `fetch(var)`. По решению владельца.
-- **RED-1, KEY-1** — ПОЛИТИКА (эскалация WARN→действие): по умолчанию безопасный вариант — расширить
-  покрытие + видимый блокирующий флаг, без авто-удаления. Согласовать.
 - **OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали (OBF-1/MET-1 → C5: карантин-вместо-delete).
