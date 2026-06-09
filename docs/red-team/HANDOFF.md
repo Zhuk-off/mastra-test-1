@@ -20,7 +20,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **378 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **389 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (добавь `-- --advanced` для AST-анализа).
 - Проверка: `npm run verify -- <dir>` (теперь ИНТЕРАКТИВНАЯ — прокликивает).
@@ -131,10 +131,11 @@ wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры).
 2. **Весь 🟧 (High) тир + кластер C6 закрыты** (2A-3, 2A-4, CSS-1, CSS-2, MAC-1/CSS-3/CJS-5).
-   Дальше — средний 🟨-приоритет: **C7** (regex-в-JS: SW-1/EVAL-1/2, PARSE-1/2, CJS-3/4), **SVG-1/2**
-   (self-closing `<script>`, `javascript:`, `<style>` в SVG — явный вектор), **OFFER-1/2/3** (соцсети/
-   правовые ломаются в `{offer}`), **2D-2/2D-3** (обфускация в `on*`, мобильные события), PIPE-3, AL-4,
-   и формально-🟧 **POL-1** (CSP — гигиена). Полный список — в реестре `_index.md`.
+   **SVG-1/2 ✅ закрыты** (clean-svg: self-closing `<script>`, неквотированные `on*`, plain href/SVG2,
+   `javascript:`-схема, `<style>` url() в SVG). Дальше — средний 🟨: **C7** (regex-в-JS: SW-1/EVAL-1/2,
+   PARSE-1/2, CJS-3/4), **OFFER-1/2/3** (соцсети/правовые ломаются в `{offer}`), **2D-2/2D-3**
+   (обфускация в `on*`, мобильные события), PIPE-3, AL-4, и формально-🟧 **POL-1** (CSP — гигиена).
+   Полный список — в реестре `_index.md`.
 3. TDD → фикс → зелёные тесты + чистый tsc → обнови `_index.md` + per-file док → коммит на `redteam-fixes`.
 4. После пачки фиксов — прогон `npm run clean -- <copy> -- --advanced` и `npm run verify -- <copy>` на
    копии реального лендинга (без регресса).

@@ -154,4 +154,11 @@
   `<style>`-блоках и `style=`-атрибутах (раньше CSS-очистка шла только по внешним `.css`-файлам).
   Переиспользует те же allowlist-проходы. Подключён в `pipeline` (после `remove-noscript-trackers`).
   Тест: `passes/html/__tests__/clean-inline-css.test.ts`.
-- **CSS-3, SVG-1/2, PHP-1, SM-1** — не трогали. CSS-3 (макросы во внешнем CSS) — часть кластера MAC-1/CJS-5.
+- **CSS-3 ✅** — макросы во внешнем `.css` теперь сканируются (`scanCssFileMacros`, см. [2c](2c-macros-offer.md)).
+- **SVG-1 ✅ + SVG-2 ✅** — `clean-svg` вынесен в чистую `cleanSvgContent` и закрывает обходы:
+  `<script>` в любой форме (закрытый + self-closing `<script xlink:href=…/>`); `on*` и БЕЗ кавычек;
+  `href` И `xlink:href` (plain SVG2 + `<use>`/`<image>`) на внешний хост ИЛИ с опасной схемой
+  (`javascript:`/`data:` через `dangerousSchemeOf`) → снимаем атрибут; трекер-`url()` в `<style>` внутри
+  SVG (через тот же allowlist, что CSS-1). Остаётся на regex (полный XML-парс — отдельное усиление C7).
+  Тест: `passes/svg/__tests__/clean-svg.test.ts` (11).
+- **PHP-1, SM-1, CSS-4** — не трогали; остаются 🆕.
