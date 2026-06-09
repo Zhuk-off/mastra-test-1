@@ -3,7 +3,15 @@ import type { Program, Node } from 'acorn';
 import { SUSPICIOUS_CALL_GLOBALS } from '../../../registry/suspicious-globals.js';
 import type { DetectionResult, DetectorContext } from '../ast/types.js';
 import { posToLine, snippetAt } from '../ast/parse.js';
-import { isExternalUrl, extractStringArg, isGlobalCallee, isMethodCallee, memberPropName } from './helpers.js';
+import {
+  isExternalUrl,
+  extractStringArg,
+  extractStringish,
+  findInjectedExternalResource,
+  isGlobalCallee,
+  isMethodCallee,
+  memberPropName,
+} from './helpers.js';
 
 /**
  * Имена, объявленные в файле (function/var/let/const/параметры) — это собственные
@@ -121,24 +129,19 @@ export function detectExfilCalls(
         isMethodCallee(n.callee, 'document', 'write') ||
         isMethodCallee(n.callee, 'document', 'writeln')
       ) {
-        const html = extractStringArg(n.arguments[0]);
-        if (html) {
-          const scriptSrcMatch = html.match(/<script[^>]*\bsrc\s*=\s*["']([^"']+)["']/i);
-          if (scriptSrcMatch && scriptSrcMatch[1]) {
-            const src = scriptSrcMatch[1];
-            if (isExternalUrl(src, mainHost)) {
-              results.push({
-                line: posToLine(source, n.start),
-                start: n.start,
-                end: n.end,
-                threatType: 'exfil-document-write',
-                description: `document.write() инжектит внешний скрипт: ${src}`,
-                snippet: snippetAt(source, n.start, n.end),
-                shouldRemove: true,
-                node,
-              });
-            }
-          }
+        const html = extractStringish(n.arguments[0]);
+        const injected = html ? findInjectedExternalResource(html, mainHost) : null;
+        if (injected) {
+          results.push({
+            line: posToLine(source, n.start),
+            start: n.start,
+            end: n.end,
+            threatType: 'exfil-document-write',
+            description: `document.write() инжектит внешний ${injected.tag}: ${injected.src}`,
+            snippet: snippetAt(source, n.start, n.end),
+            shouldRemove: true,
+            node,
+          });
         }
       }
     },

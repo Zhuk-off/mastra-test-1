@@ -166,7 +166,7 @@
 | MET-1 | detect-metric-file | 🟨 | Soundness | «Полезный код» = 5 подстрок → FP-delete файла с логикой | 🆕 |
 | RED-1 | detect-redirect | 🟨 | Policy/FN | Редирект только WARN; `assign`/`top`/косвенность мимо | 🆕 |
 | KEY-1 | detect-keylogger | 🟨 | Policy/FN | Keylogger только WARN; `onkeydown=`-присваивание мимо | 🆕 |
-| DOC-1 | detect-document-write-script | 🟨 | Soundness | Только литерал + `<script src>`; склейка/iframe/img мимо | 🆕 |
+| DOC-1 | detect-document-write-script | 🟨 | Soundness | Только литерал + `<script src>`; склейка/iframe/img мимо | ✅ |
 | COV-1 | collect/analyze-coverage | 🟧 | Robustness | Coverage удаляет интерактивный/утилитный JS как «мёртвый» | 🆕 |
 | ANA-1 | analyze-coverage | 🟨 | Robustness | Непарсимый кандидат → «мёртвый» → удаление | 🆕 |
 | COV-2 | collect-coverage | 🟨 | Robustness | Таймаут networkidle роняет весь cleanSite | 🆕 |

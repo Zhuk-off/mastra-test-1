@@ -162,4 +162,12 @@ KEY `onkeydown=`, DOC склейка/iframe.
   (function/var/let/const/параметр) — это собственная функция сайта (`ga()` = get attribute), а не
   внешний глобал. `collectLocalBindings` в `detect-exfil-calls`. Необъявленный `ga('send',…)` (внешний
   GA) по-прежнему ловится. Тесты: `detector-indirection.test.ts`.
-- **DOC-1, OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали (OBF-1/MET-1 → это C5: карантин-вместо-delete).
+- **DOC-1 ✅** — `document.write` теперь ловит инъекцию внешних `<script src>`/`<iframe src>`/`<img src>`
+  (а не только script) и разворачивает склейку строк (`'<scr'+'ipt'`) и template-литералы без подстановок
+  (`extractStringish` + `findInjectedExternalResource` в `helpers.ts`, обе ветки docwrite). Тесты:
+  `detector-docwrite.test.ts`.
+- **DET-1** — флагать нелитеральный сетевой URL (узкий вариант: atob/конкатенация с `//` или `http`),
+  чтобы не шуметь на легит `fetch(var)`. По решению владельца.
+- **RED-1, KEY-1** — ПОЛИТИКА (эскалация WARN→действие): по умолчанию безопасный вариант — расширить
+  покрытие + видимый блокирующий флаг, без авто-удаления. Согласовать.
+- **OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали (OBF-1/MET-1 → C5: карантин-вместо-delete).

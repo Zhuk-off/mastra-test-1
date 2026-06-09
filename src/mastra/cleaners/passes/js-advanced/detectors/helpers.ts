@@ -94,3 +94,46 @@ export function extractStringArg(node: unknown): string | null {
   }
   return null;
 }
+
+/**
+ * Собирает строку из литерала, template-литерала без подстановок ИЛИ конкатенации
+ * строковых литералов (`'<scr' + 'ipt'`). Нелитеральные части дают '' — то есть
+ * склейку чистых литералов разворачиваем, а вычисляемые части пропускаем (DOC-1).
+ */
+export function extractStringish(node: any): string | null {
+  if (!node) return null;
+  if (node.type === 'Literal' && typeof node.value === 'string') return node.value;
+  if (node.type === 'TemplateLiteral' && node.expressions?.length === 0) {
+    return node.quasis.map((q: any) => q.value?.cooked ?? '').join('');
+  }
+  if (node.type === 'BinaryExpression' && node.operator === '+') {
+    const l = extractStringish(node.left);
+    const r = extractStringish(node.right);
+    if (l === null && r === null) return null;
+    return (l ?? '') + (r ?? '');
+  }
+  return null;
+}
+
+/** Теги, инъекция которых через document.write/innerHTML тащит внешний ресурс. */
+const INJECTED_RESOURCE_PATTERNS: Array<{ tag: string; re: RegExp }> = [
+  { tag: 'script', re: /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i },
+  { tag: 'iframe', re: /<iframe\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i },
+  { tag: 'img', re: /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i },
+];
+
+/**
+ * Ищет в HTML-строке (аргумент document.write) инъекцию ВНЕШНЕГО ресурса:
+ * `<script src>`, `<iframe src>`, `<img src>` с внешним URL. Раньше ловился только
+ * `<script src>` (DOC-1).
+ */
+export function findInjectedExternalResource(
+  html: string,
+  mainHost: string,
+): { tag: string; src: string } | null {
+  for (const { tag, re } of INJECTED_RESOURCE_PATTERNS) {
+    const m = html.match(re);
+    if (m && m[1] && isExternalUrl(m[1], mainHost)) return { tag, src: m[1] };
+  }
+  return null;
+}
