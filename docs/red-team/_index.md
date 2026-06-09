@@ -154,7 +154,7 @@
 | PARSE-3 | ast/parse | 🟩 | Robustness | module-first; нет лимита размера/времени парса | 🆕 |
 | RIE-1 | remove-inline-exfil | 🟨 | Robustness | Удаление по узлу: `var x = fetch()` → `var x = ;` (зависит от 3c) | 🆕 |
 | EUF-1 | extract-useful-functions | 🟧 | Robustness | Удаляется объявление функции без мест вызова → ReferenceError | ✅ |
-| EUF-2 | extract-useful-functions | 🟨 | Soundness | Внешние `.js`: режутся только целые функции, не рассыпанный exfil | 🆕 |
+| EUF-2 | extract-useful-functions | 🟨 | Soundness | Внешние `.js`: режутся только целые функции, не рассыпанный exfil | ✅ |
 | EUF-3 | extract-useful-functions | 🟩 | Soundness | Консервативные пропуски (мульти-декл/arrow-expr); узкий DOM-список | 🆕 |
 | IDX-1 | js-advanced/index | 🟩 | Гигиена | Пустая заглушка (мёртвый плейсхолдер) | 🆕 |
 | DET-1 | detectors (общее) | 🟧 | Bypass | Детект только ЛИТЕРАЛЬНОЙ строки-URL → вычисляемый URL мимо | 🆕 |
@@ -164,8 +164,8 @@
 | DEC-2 | detect-exfil-calls | 🟨 | Soundness | Короткие `ga`/`hj`/`zE` → FP-удаление своей функции | ✅ |
 | OBF-1 | detect-obfuscation | 🟨 | Soundness | 3 узкие сигнатуры: FN + FP-delete легит-минификата | 🛠 |
 | MET-1 | detect-metric-file | 🟨 | Soundness | «Полезный код» = 5 подстрок → FP-delete файла с логикой | 🛠 |
-| RED-1 | detect-redirect | 🟨 | Policy/FN | Редирект только WARN; `assign`/`top`/косвенность мимо | 🛠 |
-| KEY-1 | detect-keylogger | 🟨 | Policy/FN | Keylogger только WARN; `onkeydown=`-присваивание мимо | 🛠 |
+| RED-1 | detect-redirect | 🟨 | Policy/FN | Редирект только WARN; `assign`/`top`/косвенность мимо | ✅ |
+| KEY-1 | detect-keylogger | 🟨 | Policy/FN | Keylogger только WARN; `onkeydown=`-присваивание мимо | ✅ |
 | DOC-1 | detect-document-write-script | 🟨 | Soundness | Только литерал + `<script src>`; склейка/iframe/img мимо | ✅ |
 | COV-1 | collect/analyze-coverage | 🟧 | Robustness | Coverage удаляет интерактивный/утилитный JS как «мёртвый» | 🆕 |
 | ANA-1 | analyze-coverage | 🟨 | Robustness | Непарсимый кандидат → «мёртвый» → удаление | 🆕 |

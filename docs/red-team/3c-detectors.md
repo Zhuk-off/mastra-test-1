@@ -154,10 +154,6 @@ KEY `onkeydown=`, DOC склейка/iframe.
   Тесты: `detector-indirection.test.ts`. **Остаток DET-2:** резолв алиасов (`const f=fetch; f()`),
   двухстрочный `var img=new Image(); img.src=evil`, `document.createElement('script').src=` — нужен
   лёгкий data-flow, отдельно.
-- **DET-1** 🛠 — флагать нелитеральный сетевой URL как подозрительный (нужна проводка WARN-результатов
-  в отчёт: `remove-inline-exfil` фильтрует только `shouldRemove`; FP-шум — взвесить).
-- **RED-1, KEY-1** — требуют ПОЛИТИЧЕСКОГО решения (эскалация WARN→действие может задеть легит-редиректы) —
-  согласовать с владельцем.
 - **DEC-2 ✅** — трекер-вызов (`fbq`/`ga`/`hj`/…) НЕ флагается, если имя объявлено локально в файле
   (function/var/let/const/параметр) — это собственная функция сайта (`ga()` = get attribute), а не
   внешний глобал. `collectLocalBindings` в `detect-exfil-calls`. Необъявленный `ga('send',…)` (внешний
@@ -166,14 +162,16 @@ KEY `onkeydown=`, DOC склейка/iframe.
   (а не только script) и разворачивает склейку строк (`'<scr'+'ipt'`) и template-литералы без подстановок
   (`extractStringish` + `findInjectedExternalResource` в `helpers.ts`, обе ветки docwrite). Тесты:
   `detector-docwrite.test.ts`.
-- **RED-1 🛠 (покрытие расширено, WARN)** — `detect-redirect` теперь ловит `location.assign(...)`,
-  `top/self/parent.location`, `window.top.location`, bracket `location['href']=`, bare `location='...'`
-  (helpers `isLocationRef`/`memberPropName`). Осталось ПОЛИТИЧЕСКОЕ решение: эскалировать WARN→карантин/
-  удаление (риск задеть легит партнёрский редирект) — за владельцем; сейчас сохранён WARN.
-- **KEY-1 🛠 (покрытие расширено, WARN)** — `detect-keylogger` ловит присваивание on*-свойств
-  (`document.onkeydown = e => fetch(...)`, `el.onkeyup = ...`) с сетевым вызовом, не только
-  `addEventListener`. Эскалация WARN→действие — за владельцем.
-  Тесты RED/KEY: `detector-redirect-keylogger.test.ts`.
+- **RED-1 ✅ + KEY-1 ✅ (эскалированы в ДЕЙСТВИЕ по политике владельца)** — внешний JS-редирект и
+  keylogger у владельца НИКОГДА не легит → теперь `shouldRemove:true`, авто-нейтрализуются (не WARN).
+  `detect-redirect` покрывает `location.href=/assign/replace`, `top/self/parent.location`, bracket,
+  bare `location=`; `detect-keylogger` — `addEventListener` и on*-присваивания (`onkeydown=`).
+  Удаление reference-safe через общий `neutralizeDetections` (statement → убрать, выражение → `void 0`,
+  дедуп вложенных). Работает и в inline-`<script>`, и во внешних `.js`.
+- **EUF-2 ✅ (заодно)** — внешние `.js` теперь получают и statement-level exfil-хирургию
+  (`detectExfilCalls` → `neutralizeDetections` в `clean-js`), не только удаление целых pure-exfil функций.
+  Тесты: `remove-inline-exfil.test.ts` (RED/KEY inline), `clean-js.test.ts` (RED/KEY внешние).
+- **DET-1** 🛠 — флагать нелитеральный сетевой URL как подозрительный — остаётся (FP-шум, взвесить).
 - **DET-1** — флагать нелитеральный сетевой URL (узкий вариант: atob/конкатенация с `//`/`http`),
   чтобы не шуметь на легит `fetch(var)`. По решению владельца.
 - **OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали (OBF-1/MET-1 → C5: карантин-вместо-delete).

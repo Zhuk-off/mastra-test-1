@@ -13,7 +13,8 @@ import { isExternalUrl, extractStringArg, isLocationRef, memberPropName } from '
  *  - location.replace('https://external...')
  *  - window.location.replace('https://external...')
  *
- * shouldRemove is always false — WARN only.
+ * shouldRemove: true — внешний JS-редирект у владельца НИКОГДА не легит (чужой редирект =
+ * кража трафика), поэтому он автоматически вырезается/нейтрализуется, а не просто варнится.
  */
 export function detectRedirect(ast: Program, ctx: DetectorContext): DetectionResult[] {
   const results: DetectionResult[] = [];
@@ -43,7 +44,7 @@ export function detectRedirect(ast: Program, ctx: DetectorContext): DetectionRes
         threatType: 'redirect',
         description: `Редирект на внешний хост: ${url}`,
         snippet: snippetAt(source, n.start, n.end),
-        shouldRemove: false,
+        shouldRemove: true,
         node,
       });
     },
@@ -67,7 +68,7 @@ export function detectRedirect(ast: Program, ctx: DetectorContext): DetectionRes
         threatType: 'redirect',
         description: `Редирект на внешний хост через location.${method}(): ${url}`,
         snippet: snippetAt(source, n.start, n.end),
-        shouldRemove: false,
+        shouldRemove: true,
         node,
       });
     },

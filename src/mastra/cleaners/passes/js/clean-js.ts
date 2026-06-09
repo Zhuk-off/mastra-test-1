@@ -1,5 +1,4 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import MagicString from 'magic-string';
 import type { ChangelogEntry } from '../../types.js';
 import { removeServiceWorker } from './remove-service-worker.js';
 import { removeEvalObfuscation } from './remove-eval-obfuscation.js';
@@ -11,6 +10,8 @@ import { detectObfuscation } from '../js-advanced/detectors/detect-obfuscation.j
 import { detectKeylogger } from '../js-advanced/detectors/detect-keylogger.js';
 import { detectRedirect } from '../js-advanced/detectors/detect-redirect.js';
 import { detectDocWriteScript } from '../js-advanced/detectors/detect-document-write-script.js';
+import { detectExfilCalls } from '../js-advanced/detectors/detect-exfil-calls.js';
+import { neutralizeDetections } from '../js-advanced/neutralize-detections.js';
 
 export interface CleanJsResult {
   removed: number;
@@ -80,55 +81,21 @@ export async function cleanJsFile(
       }
     }
 
-    // keylogger/redirect/docWrite — на АКТУАЛЬНОМ ast (после возможной мутации extractUsefulFunctions)
+    // exfil/redirect/keylogger/document.write — на АКТУАЛЬНОМ ast (после extractUsefulFunctions).
+    // Редирект на чужой хост и keylogger у владельца не легит → нейтрализуем (не WARN).
+    // Удаление reference-safe (DEC-1): statement убирается целиком, вызов в выражении → void 0.
     if (ast) {
-      // Stage 7: detect keylogger — WARN only
-      const keyloggerResults = detectKeylogger(ast, content);
-      for (const r of keyloggerResults) {
-        log.push({
-          file: relPath,
-          type: 'KEYLOGGER_WARN',
-          description: r.description,
-          codeSnippet: r.snippet,
-          lineNumber: r.line,
-        });
-        detectorWarnings++;
-      }
-
-      // Stage 7: detect redirect — WARN only
-      const redirectResults = detectRedirect(ast, { source: content, relPath, mainHost });
-      for (const r of redirectResults) {
-        log.push({
-          file: relPath,
-          type: 'REDIRECT_WARN',
-          description: r.description,
-          codeSnippet: r.snippet,
-          lineNumber: r.line,
-        });
-        detectorWarnings++;
-      }
-
-      // Stage 7: detect document.write(<script src="...">) — remove
-      const docWriteResults = detectDocWriteScript(ast, { source: content, relPath, mainHost });
-      const toRemove = docWriteResults.filter(r => r.shouldRemove);
-      if (toRemove.length > 0) {
-        const ms = new MagicString(content);
-        // Sort descending to avoid position shifts
-        const sorted = [...toRemove].sort((a, b) => b.start - a.start);
-        for (const r of sorted) {
-          let end = r.end;
-          while (end < content.length && /[;\s]/.test(content[end]!)) end++;
-          ms.remove(r.start, end);
-          log.push({
-            file: relPath,
-            type: r.threatType.toUpperCase(),
-            description: r.description,
-            codeSnippet: r.snippet,
-            lineNumber: r.line,
-          });
-          removed++;
-        }
-        content = ms.toString();
+      const detCtx = { source: content, relPath, mainHost };
+      const detections = [
+        ...detectExfilCalls(ast, detCtx),
+        ...detectRedirect(ast, detCtx),
+        ...detectKeylogger(ast, content),
+        ...detectDocWriteScript(ast, detCtx),
+      ];
+      const neutralized = neutralizeDetections(content, ast, detections, log, relPath);
+      if (neutralized.removed > 0) {
+        content = neutralized.code;
+        removed += neutralized.removed;
       }
     }
   }

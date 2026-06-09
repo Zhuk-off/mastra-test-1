@@ -53,7 +53,8 @@ function containsNetworkCall(node: Node): boolean {
  * Detects keylogger-like patterns:
  * addEventListener('keydown'|'keypress'|'input', function() { ...<network call>... })
  *
- * shouldRemove is always false — this is a WARN-only detector.
+ * shouldRemove: true — перехват клавиш + сеть у владельца не используется (валидация только
+ * на лендинге), поэтому keylogger-паттерн автоматически нейтрализуется, а не просто варнится.
  */
 export function detectKeylogger(ast: Program, source: string): DetectionResult[] {
   const results: DetectionResult[] = [];
@@ -90,7 +91,7 @@ export function detectKeylogger(ast: Program, source: string): DetectionResult[]
           threatType: 'keylogger',
           description: `Подозрительный keylogger: addEventListener('${eventName}', ...) + сетевой вызов внутри`,
           snippet: snippetAt(source, n.start, n.end),
-          shouldRemove: false,
+          shouldRemove: true,
           node,
         });
       }
@@ -120,7 +121,7 @@ export function detectKeylogger(ast: Program, source: string): DetectionResult[]
           threatType: 'keylogger',
           description: `Подозрительный keylogger: ${prop} = ... + сетевой вызов внутри`,
           snippet: snippetAt(source, n.start, n.end),
-          shouldRemove: false,
+          shouldRemove: true,
           node,
         });
       }
