@@ -22,7 +22,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **445 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **453 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (AST-advanced включён по умолчанию; `--no-advanced` чтобы выключить).
 - Проверка: `npm run verify -- <dir>` (интерактивная — прокликивает).
@@ -119,8 +119,8 @@ PIPE-3 (per-file try/catch — один кривой файл не валит п
 - **PHP-1** — обфусцированные бэкдоры мимо; `.phtml`/`.inc` не сканируются; сейчас только WARN.
 
 **Normalize/HTML (🟨):** NORM-4 (контекстно-слепая замена бьёт inline-JS/meta), NORM-5 (`stripPhpCode`
-рвёт разметку), NORM-6 (выбор главного файла узкий/недетерминирован), DOM-2/DOM-3/DOM-4, 2B-1/2B-2
-(base/meta-refresh), 2A-5 (inline-трекеры — только вендор-сниппеты).
+рвёт разметку), NORM-6 (выбор главного файла узкий/недетерминирован), DOM-2/DOM-3/DOM-4, 2B-1
+(base-aware normalize; 2B-2 ✅ meta-refresh снят), 2A-5 (inline-трекеры — только вендор-сниппеты).
 
 **Макросы (🟨):** MAC-2 (другие синтаксисы `[..]`/`%..%`/`{{..}}`), MAC-3 (template-скрипты/непарсимый inline).
 

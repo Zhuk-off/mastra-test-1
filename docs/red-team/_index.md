@@ -119,7 +119,7 @@
 | 2A-4 | remove-noscript-trackers | 🟨 | Bypass | `<noscript>` allowlist-слеп: блок-лист → неизвестное выживает | ✅ |
 | 2A-5 | remove-inline-trackers | 🟨 | Soundness | Только вендор-сниппеты; кастомный inline-exfil не здесь (→2d) | 🆕 |
 | 2B-1 | remove-base | 🟨 | Robustness | `<base>` вырезается вслепую + normalize base-неосведомлён → битые пути | 🆕 |
-| 2B-2 | remove-meta-refresh | 🟨 | Bypass | Относительный и закавыченный url-refresh переживают | 🆕 |
+| 2B-2 | remove-meta-refresh | 🟨 | Bypass | Относительный и закавыченный url-refresh переживают | ✅ |
 | 2B-3 | remove-object-embed | 🟩 | Robustness | `<object>` с fallback удаляется целиком; embed наследует 2A | 🆕 |
 | 2B-4 | remove-frames | 🟩 | Robustness | Настоящий frameset-лендинг → пустая страница | 🆕 |
 | 2B-5 | remove-tracker-metas | 🟩 | Soundness | Узкий блок-лист (нет robots/индексации, `property=`) | 🆕 |

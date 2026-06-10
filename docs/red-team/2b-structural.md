@@ -32,7 +32,7 @@
 - **Уверенность:** логика подтверждена чтением `remove-base` + `normalize`. Реальная частота —
   зависит от того, добавляет ли наш загрузчик `<base href>` → нить **T-7**.
 
-### [2B-2] 🔴 Bypass · 🟨 Medium · meta-refresh: относительный и закавыченный URL переживают
+### [2B-2] 🔴 Bypass · 🟨 Medium · meta-refresh: относительный и закавыченный URL переживают (✅ закрыта)
 
 - **Сейчас:** удаляем `<meta http-equiv=refresh>` если url нет (чистый таймер) **или**
   `isExternalUrl(url)` ([:12](src/mastra/cleaners/passes/html/remove-meta-refresh.ts:12)).
@@ -107,4 +107,15 @@
 
 1. **2B-1** — `remove-base`: разрешать базу в пути (или сделать `normalize` base-aware), не удалять
    вслепую. Твой кейс — реальный, особенно для скачанных зеркал (T-7).
-2. **2B-2** — `meta-refresh`: триммить/снимать кавычки и трактовать любой url-refresh как подозрительный.
+2. **2B-2 ✅** — `meta-refresh`: триммить/снимать кавычки и трактовать любой url-refresh как подозрительный.
+
+---
+
+## ✅ Статус фиксов
+
+- **2B-2 ✅** — `removeMetaRefresh` снимает ЛЮБОЙ `<meta http-equiv="refresh">` (с url или таймер), а не
+  только `isExternalUrl(url)`. Закрывает оба обхода: относительный (`url=offer.html` — клоакинг лендинг→
+  оффер) и закавыченный (`url='https://evil'` — кавычка ломала `^https?://`), плюс protocol-relative.
+  Под owner decision #1 (чужой/авто-редирект = действие) + #7 (трафик на оффер по клику, не автоматом).
+  Оригинальный `content` (целевой URL) → карантин/отчёт (`META_REFRESH_REMOVED`) для ручной привязки к
+  офферу. Тест: `remove-meta-refresh.test.ts` (8). **2B-1** — не трогали (base-aware normalize, отдельно).
