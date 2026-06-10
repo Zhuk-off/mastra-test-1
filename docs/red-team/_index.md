@@ -134,7 +134,7 @@
 | OFFER-3 | offer-detector | 🟩 | Soundness | Декод только `&amp;`; относительные офферы не ловятся | ✅ |
 | 2D-1 | allowlist.ts (сквозь) | 🟧 | Bypass | `data:`/`javascript:`/`blob:` в src/href не ловит НИКТО (T-3) | ✅ |
 | 2D-2 | strip-event-attrs | 🟨 | Bypass | `on*` снимается только при литеральном url/keyword; обфускация мимо | 🆕 |
-| 2D-3 | event-attrs.ts | 🟨 | Bypass | Реестр `on*` неполон — нет touch/pointer/wheel (mobile) | 🆕 |
+| 2D-3 | strip-event-attrs | 🟨 | Bypass | Реестр `on*` неполон — нет touch/pointer/wheel (mobile) | ✅ |
 | 2D-4 | inject-csp | 🟩 | Robustness | Размещение ок (T-4); но SKIP_DOM-файлы без CSP (← PIPE-1) | ✅ |
 | 2D-5 | remove-inline-exfil-pass | 🟨 | Граница | Непарсимый inline-script молча пропущен; detect — Тир 3 | 🆕 |
 | 2D-6 | strip-dangerous-hrefs (new pass) | 🟧 | Bypass | `<a href="javascript:/data:">` не проходит `classifyResource` → выживает (остаток C1: классификатор готов, проход не подключён) | ✅ |

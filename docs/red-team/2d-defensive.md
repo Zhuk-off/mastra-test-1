@@ -115,4 +115,11 @@
   offer-detector (иначе ломались бы легитимные внешние ссылки, ср. OFFER-1). Подключён в `pipeline`
   перед `replaceOfferLinks`; стат `dangerousHrefsNeutralized`; регресс-тесты —
   `__tests__/strip-dangerous-hrefs.test.ts` (12) + интеграция в `dom-passes.test.ts`.
-- **2D-2 / 2D-3 / 2D-5** — НЕ трогали (это C4/харднинг по `on*`); остаются 🆕.
+- **2D-3 ✅** — `strip-event-attrs` теперь снимает ЛЮБОЙ `on*`-обработчик по префиксу `/^on[a-z]/i`
+  (фиксированный список `DANGEROUS_EVENT_ATTRS` был неполон и удалён) — покрыты touch/pointer/wheel/
+  clipboard/history/media, а лендинги арбитража мобильные. Гейт по значению (внешний URL/трекер-ключевое
+  слово) сохранён, поэтому простые quiz-обработчики (`ontouchstart="nextStep()"`) остаются. Тест:
+  `strip-event-attrs.test.ts` (8).
+- **2D-2** — НЕ трогали: обфусцированный/протокол-относительный exfil в значении `on*` (`location='//evil'`,
+  `atob(...)`) блок-лист по значению пока не ловит (в идеале — гнать значение `on*` через AST inline-exfil). 🆕
+- **2D-5** — НЕ трогали (непарсимый inline-script — логировать, не молча пропускать); 🆕.
