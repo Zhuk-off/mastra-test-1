@@ -243,6 +243,9 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     const ext = extname(file).toLowerCase();
     const relPath = relative(siteDir, file);
 
+    // PIPE-3: изолируем обработку каждого файла — один кривой файл (битый JS/HTML, гонка по ФС)
+    // не должен ронять весь прогон очистки. Ошибка фиксируется в логе, идём дальше.
+    try {
     if (ext === '.html' || ext === '.htm' || ext === '.php') {
       const before = await readFile(file, 'utf8');
       stats.bytesBefore += before.length;
@@ -339,6 +342,14 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
       const removed = await cleanCssFile(file, relPath, changelog, macros);
       stats.cssFilesScanned++;
       stats.cssItemsRemoved += removed;
+    }
+    } catch (err) {
+      // PIPE-3: файл пропущен из-за ошибки — фиксируем в логе и продолжаем со следующим.
+      changelog.push({
+        file: relPath,
+        type: 'FILE_SKIPPED_ERROR',
+        description: `Файл пропущен из-за ошибки обработки: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
   }
 

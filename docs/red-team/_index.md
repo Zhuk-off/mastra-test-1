@@ -90,7 +90,7 @@
 | DOM-4 | html-dom.ts | 🟨 | Robustness | `</script>` в строке ломает round-trip | 🆕 |
 | PIPE-1 | pipeline.ts | 🟥 | Bypass | Серверный тег → `applyHtmlPasses` тихо возвращает HTML как есть | ✅ |
 | PIPE-2 | pipeline.ts | 🟧 | Bypass/Robust | Удаление `<script src>` регэкспом мимо DOM (query/`../`/self-close промахи) | ✅ |
-| PIPE-3 | pipeline.ts | 🟨 | Robustness | Нет try/catch по файлу — один кривой файл роняет весь прогон | 🆕 |
+| PIPE-3 | pipeline.ts | 🟨 | Robustness | Нет try/catch по файлу — один кривой файл роняет весь прогон | ✅ |
 | PIPE-4 | pipeline.ts | 🟨 | Bypass | Пост-обработка правит даже SKIP_DOM-нутые серверные файлы | ✅ |
 | PIPE-6 | pipeline.ts | 🟨 | Robust/Perf | Сетевой репин-фетч в горячем цикле, фолбэк неясен | 🆕 |
 | PIPE-5 | pipeline.ts | 🟩 | Low | `bytes*` = UTF-16 length; схлопывание `\n` задевает `<pre>` | 🆕 |
