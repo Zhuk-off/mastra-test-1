@@ -27,7 +27,7 @@
   media → quarantine; `javascript:` в href → remove. Это единственный фикс, закрывающий весь класс.
 - **Уверенность:** подтверждено сквозным чтением всех HTML-проходов (T-3 окончательно резолвлен).
 
-### [2D-2] 🔴 Bypass · 🟨 Medium-High · `on*`-обработчики снимаются только при ЛИТЕРАЛЬНОМ url/keyword
+### [2D-2] 🔴 Bypass · 🟨 Medium-High · `on*`-обработчики снимаются только при ЛИТЕРАЛЬНОМ url/keyword (✅ закрыта)
 
 - **Сейчас:** `stripEventAttrs` снимает `on*` только если значение содержит `/https?:\/\//i` **или**
   трекер-ключевое слово ([:21](src/mastra/cleaners/passes/html/strip-event-attrs.ts:21)).
@@ -68,7 +68,7 @@
   иначе «последний рубеж» отсутствует именно там, где чистка пропущена.
 - **Уверенность:** подтверждено чтением кода + тестом.
 
-### [2D-5] 🟢 Граница/Robustness · 🟨 Medium · remove-inline-exfil: непарсимое пропускается, только advanced
+### [2D-5] 🟢 Граница/Robustness · 🟨 Medium · remove-inline-exfil: непарсимое пропускается, только advanced (✅ закрыта)
 
 - **Сейчас:** `if (!ast) return;` ([:22](src/mastra/cleaners/passes/html/remove-inline-exfil-pass.ts:22))
   — непарсимый inline-`<script>` не трогается; проход добавляется только в `--advanced` (по умолчанию
@@ -96,3 +96,44 @@
 2. **2D-2 + 2D-3** — `on*`-обработчики: и логика (только литеральный url), и реестр (нет touch/pointer)
    дырявы; обфусцированный exfil в обработчике не ловит никто.
 3. **2D-4** — закрыть PIPE-1, иначе CSP-бэкстоп отсутствует на серверных файлах.
+
+---
+
+## ✅ Статус фиксов (C1)
+
+- **2D-1 ✅ (на уровне классификатора + src-контексты)** — `classifyResource` теперь возвращает
+  `quarantine` для `data:`/`blob:`/`javascript:`/`vbscript:`/`filesystem:` в script/iframe/media/
+  stylesheet и `remove` для `javascript:`/`vbscript:` в `anchor`(href). Для **src** это уже работает
+  end-to-end (проходы 2a зовут `classifyResource`).
+- **2D-6 ✅ (проводка прохода по `<a>`/`<area>`):** новый проход
+  [`strip-dangerous-hrefs.ts`](src/mastra/cleaners/passes/html/strip-dangerous-hrefs.ts) зовёт
+  `classifyResource(href,'anchor')` для `a[href]`/`area[href]` и **нейтрализует** опасную схему
+  (`javascript:`/`vbscript:`/`data:`/`blob:`/`filesystem:`): снимает ТОЛЬКО `href` (видимый текст
+  кнопки CTA сохраняется), оригинал кладёт в карантин (восстановимо + видно, какую кнопку привязать к
+  офферу). Под политику №1 (чужая навигация по клику = кража → действие, не WARN). Гейт — новый
+  `dangerousSchemeOf()` в `allowlist.ts`: трогаем ТОЛЬКО схемы, внешние http(s)-хосты остаются зоной
+  offer-detector (иначе ломались бы легитимные внешние ссылки, ср. OFFER-1). Подключён в `pipeline`
+  перед `replaceOfferLinks`; стат `dangerousHrefsNeutralized`; регресс-тесты —
+  `__tests__/strip-dangerous-hrefs.test.ts` (12) + интеграция в `dom-passes.test.ts`.
+- **2D-3 ✅** — `strip-event-attrs` теперь снимает ЛЮБОЙ `on*`-обработчик по префиксу `/^on[a-z]/i`
+  (фиксированный список `DANGEROUS_EVENT_ATTRS` был неполон и удалён) — покрыты touch/pointer/wheel/
+  clipboard/history/media, а лендинги арбитража мобильные. Гейт по значению (внешний URL/трекер-ключевое
+  слово) сохранён, поэтому простые quiz-обработчики (`ontouchstart="nextStep()"`) остаются. Тест:
+  `strip-event-attrs.test.ts` (8).
+- **2D-2 ✅** — обфусцированный/протокол-относительный exfil в значении `on*` теперь ловится.
+  `strip-event-attrs` оборачивает значение обработчика в `function __h(event){…}` (чтобы `return`/`this`/
+  `event` были валидны), парсит через `parseJs` и гонит AST через те же `detectExfilCalls` + `detectRedirect`,
+  что и inline-`<script>` (DET-1/DET-2 умеют обфускацию и `//host`). Снимается: `location='//evil'`,
+  `location=atob('aHR0…')`, `fetch(atob(...))`, `new Image().src='\x2f\x2fevil'`, exfil внутри `return …`.
+  Гейт по литералу (внешний URL/трекер-слово) сохранён как первая линия; AST-проверка аддитивна. Same-host
+  навигация и обычные обработчики (`onsubmit="return validate()"`) остаются (`isExternalUrl` ≠ свой хост;
+  непарсимое → не трогаем, ср. ANA-1). Тесты: `strip-event-attrs.test.ts` (+8 = 16).
+- **2D-5 ✅** — непарсимый inline-`<script>` больше не пропускается молча. `removeInlineExfilPass`:
+  (а) сначала пропускает не-JS типы (`json`/`template`/`ld+json`) через `JS_TYPE_RE`; (б) если тело
+  не парсится И содержит индикаторы exfil/обфускации (`INLINE_SUSPICION_RE`: fetch/sendBeacon/WS/eval/
+  Function/atob/unescape/fromCharCode/document.write/new Image/`.src=`/location-редирект) — скрипт
+  КАРАНТИНИТСЯ целиком (`kind: inline-script-unparsed`, лог `INLINE_JS_NOT_ANALYZED`, элемент удалён,
+  оригинал сохранён). Непарсимый JS и в браузере не исполнится корректно → удаление не теряет рабочую
+  логику; benign непарсимое (макро-шаблоны `{{offer}}`, битая безобидная вёрстка) индикаторов не имеет
+  → не трогаем (без FP/шума). Действие, а не WARN (owner #3). Закрывает inline-сторону [PARSE-2](3b-ast-inline-exfil.md).
+  Тест: `__tests__/inline-exfil-dom.test.ts` (+4).

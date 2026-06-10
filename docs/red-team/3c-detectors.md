@@ -135,3 +135,54 @@ KEY `onkeydown=`, DOC склейка/iframe.
 2. **RED-1 + KEY-1** — редирект и keylogger (самые ценные угрозы) только WARN → уезжают в прод;
    сделать действием/блокирующим флагом.
 3. **OBF-1 + MET-1** — whole-file delete по узкой эвристике: карантин вместо удаления, оценка по AST.
+
+---
+
+## ✅ Статус фиксов (C4 — в работе, по под-фиксам)
+
+- **DET-3 ✅** — единый `isExternalUrl` вынесен в `detectors/helpers.ts` (+ `extractStringArg`),
+  3 копии удалены. Новая версия обрабатывает `//host` (через базу `https://<mainHost>`) → `fetch`,
+  `location.href=`, `document.write(<script src>)` на `//evil` теперь детектятся. Относительные пути
+  не считаются внешними (нет FP даже при пустом mainHost). Тесты: `detector-external-url.test.ts`.
+- **DEC-1 ✅** — в `remove-inline-exfil.ts` удаление exfil-вызова больше не оставляет битый JS:
+  если вызов — самостоятельный statement, убираем целиком; иначе (`var x = fetch()`, `a && fetch()`,
+  `foo(fetch())`) нейтрализуем подстановкой `void 0` (синтаксис сохраняется, остальной inline-код не
+  рушится). Родитель узла определяется через `walk.ancestor`. Тесты: `remove-inline-exfil.test.ts`.
+- **DET-2 ✅ (member/bracket + лёгкий data-flow)** — добавлены `isGlobalCallee`/`isMethodCallee`/
+  `memberPropName` в `helpers.ts`; `detect-exfil-calls` ловит `window.fetch`/`self.fetch`/`window['fetch']`,
+  `navigator['sendBeacon']`, `document['write']`/`writeln`, `new window.WebSocket`, `new window.Image().src`.
+  **Остаток DET-2 закрыт:** `collectExfilBindings` (пре-пасс) резолвит простые алиасы
+  (`const f=fetch; f(evil)`, `var WS=WebSocket; new WS(...)` через `referencedGlobalName`) и переменные-стоки
+  (`var img=new Image()` / `var s=document.createElement('script'|'img')`); `srcAssignmentKind` ловит
+  `<sink>.src=url` в двухстрочной И инлайн (`createElement('script').src=`) форме. Новый threatType
+  `exfil-script-src` (динамический внешний `<script>`). Судьбу всё равно решает внешний/обфусцированный URL
+  (DET-1) → FP ничтожен; областей видимости не трекаем (достаточно). Тесты: `detector-dataflow.test.ts` (16).
+- **DEC-2 ✅** — трекер-вызов (`fbq`/`ga`/`hj`/…) НЕ флагается, если имя объявлено локально в файле
+  (function/var/let/const/параметр) — это собственная функция сайта (`ga()` = get attribute), а не
+  внешний глобал. `collectLocalBindings` в `detect-exfil-calls`. Необъявленный `ga('send',…)` (внешний
+  GA) по-прежнему ловится. Тесты: `detector-indirection.test.ts`.
+- **DOC-1 ✅** — `document.write` теперь ловит инъекцию внешних `<script src>`/`<iframe src>`/`<img src>`
+  (а не только script) и разворачивает склейку строк (`'<scr'+'ipt'`) и template-литералы без подстановок
+  (`extractStringish` + `findInjectedExternalResource` в `helpers.ts`, обе ветки docwrite). Тесты:
+  `detector-docwrite.test.ts`.
+- **RED-1 ✅ + KEY-1 ✅ (эскалированы в ДЕЙСТВИЕ по политике владельца)** — внешний JS-редирект и
+  keylogger у владельца НИКОГДА не легит → теперь `shouldRemove:true`, авто-нейтрализуются (не WARN).
+  `detect-redirect` покрывает `location.href=/assign/replace`, `top/self/parent.location`, bracket,
+  bare `location=`; `detect-keylogger` — `addEventListener` и on*-присваивания (`onkeydown=`).
+  Удаление reference-safe через общий `neutralizeDetections` (statement → убрать, выражение → `void 0`,
+  дедуп вложенных). Работает и в inline-`<script>`, и во внешних `.js`.
+- **EUF-2 ✅ (заодно)** — внешние `.js` теперь получают и statement-level exfil-хирургию
+  (`detectExfilCalls` → `neutralizeDetections` в `clean-js`), не только удаление целых pure-exfil функций.
+  Тесты: `remove-inline-exfil.test.ts` (RED/KEY inline), `clean-js.test.ts` (RED/KEY внешние).
+- **DET-1 ✅ (узкий вариант по решению владельца)** — в `detect-exfil-calls` (fetch/WebSocket/`Image().src`)
+  и `detect-redirect` (`location.href=`/`assign`/`replace`) `extractStringArg` заменён на `extractStringish`:
+  склейка схемы по кускам (`'htt'+'ps://evil'`) и template-литералы (`` `https://evil/${x}` ``)
+  теперь РЕЗОЛВЯТСЯ и проходят `isExternalUrl` — тот же внешне-хостовый чек, что и для литерала (FP-профиль
+  не меняется). Плюс новый `obfuscatedDecoderIn` в `helpers.ts`: `atob`/`unescape`/`String.fromCharCode`
+  в аргументе URL → `shouldRemove:true` (нейтрализация, т.к. WARN-only детекции в `clean-js` сейчас
+  отбрасываются). Намеренно ИСКЛЮЧЕНЫ `decodeURIComponent`/`btoa` — иначе шум. Голая переменная
+  (`fetch(var)`, `fetch(apiBase+id)`), относительный путь и свой хост НЕ флагуются. `extractStringish`
+  заодно стал разворачивать template-литералы с подстановками (раньше — только без), что усилило и DOC-1
+  (FP-безопасно: если хост в подстановке — он пуст → не внешний). Тесты: `detector-computed-url.test.ts` (22).
+  **Остаток DET-2** (резолв алиасов `const f=fetch`, двухстрочный `var img=new Image();img.src=`) — отдельно.
+- **OBF-1, MET-1, EVAL-1, SW-2** — ещё не трогали (OBF-1/MET-1 → C5: карантин-вместо-delete).

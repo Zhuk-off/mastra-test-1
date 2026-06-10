@@ -116,3 +116,27 @@
    проходы — место, где обе дыры доходят до браузера. Подтверждено сквозь.
 2. **2A-3 / 2A-4** — распространить белый список на preconnect/preload и на содержимое `<noscript>`
    (сейчас там блок-лист → неизвестное проходит).
+
+---
+
+## ✅ Статус фиксов (C1)
+
+- **2A-1 ✅** — `classifyResource` теперь нормализует `src` (trim + вырезание `\t\r\n`), поэтому
+  `remove-tracker-{scripts,iframes}` и `remove-img-pixels` видят тот же URL, что и браузер →
+  whitespace-обход закрыт. Фикс централизован в `allowlist.ts` (см. [allowlist.md](allowlist.md)).
+- **2A-2 ✅** — `data:`/`javascript:`/`blob:` в `<script>`/`<iframe>` src → теперь `quarantine`
+  (классификация схемы в `allowlist.ts`); проходят через те же `classifyResource`-вызовы 2a.
+- **2A-3 ✅** — `remove-tracker-links` переписан на белый список: все ресурс-несущие `rel`
+  (stylesheet / preload / modulepreload / prefetch / preconnect / dns-prefetch) идут через
+  `classifyResource` (kind по `as`: style→stylesheet, image→img, video/audio→media, font→stylesheet,
+  иначе→script; modulepreload→script; preconnect/dns-prefetch→preconnect). Неизвестный хост preload/
+  preconnect → карантин (раньше keep — а preload СКАЧИВАЕТ ресурс). Мульти-значный `rel` и
+  `modulepreload` теперь покрыты. Прочие rel (icon/canonical/manifest) не трогаем. Тесты:
+  `remove-tracker-links.test.ts` (11).
+- **2A-4 ✅** — `remove-noscript-trackers` больше не блок-лист: содержимое `<noscript>` (которое внешний
+  парсер держит текстом) разбирается вложенным `parseFragment` (новые `parseFragment`/`serializeFragment`
+  в `html-dom.ts`), и `script[src]`/`iframe[src]`/`img[src]` внутри идут через `classifyResource`. Опасные/
+  чужие узлы вырезаются ХИРУРГИЧНО (через `quarantineNode`), легитимный fallback (текст, локальный/trusted
+  `<img>`) сохраняется; пустой noscript удаляется. Неизвестный пиксель/iframe в noscript теперь ловится
+  (практически закрывает и DOM-3). Тесты: `remove-noscript-trackers.test.ts` (6).
+- **2A-5** — НЕ трогали (граница: AST-защита от inline-exfil — это 2d); остаётся 🆕.

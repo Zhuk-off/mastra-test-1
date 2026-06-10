@@ -29,6 +29,7 @@ export function renderReport(
   L.push(`- картинок-пикселей удалено/в карантин: **${stats.imgPixelsRemoved}**`);
   L.push(`- <object>/<embed>/<frame> удалено: **${stats.objectEmbedsRemoved + stats.framesRemoved}**`);
   L.push(`- оффер-ссылок → {offer}: **${stats.offerLinksReplaced}**`);
+  L.push(`- опасных href нейтрализовано (<a>/<area>, javascript:/data:): **${stats.dangerousHrefsNeutralized}**`);
   L.push(`- CSP внедрён (файлов): **${stats.cspInjected}**`);
   L.push(`- JS-файлов: obfuscated удалено ${stats.obfuscatedFilesRemoved}, metric удалено ${stats.metricFilesRemoved}`);
   L.push(`- чужих макросов на ревью: **${stats.macrosFlagged}**`);
@@ -44,6 +45,34 @@ export function renderReport(
     L.push('');
   } else {
     L.push('## Карантин', '', '_Пусто — всё классифицировано однозначно._', '');
+  }
+
+  // Файлы, из которых вырезан серверный код (и затем очищены) — информативно.
+  const stripped = countByType(log, 'SERVER_TAGS_STRIPPED');
+  if (stripped.length > 0) {
+    L.push(`## ℹ️ Серверные теги удалены — ${stripped.length} файл(ов) (очищены)`, '');
+    L.push(
+      'Из этих файлов вырезан весь серверный код (`<?php ?>` / `<% %>`), затем проведена полная очистка. ' +
+        'Свой серверный код (spysecure / отправка формы) добавляется на этапе адаптации — если среди файлов был обработчик формы, верните его там.',
+      '',
+    );
+    for (const s of stripped) L.push(`- \`${s.file}\``);
+    L.push('');
+  }
+
+  // Удалённые ЦЕЛИКОМ файлы (по эвристике) — самые FP-склонные и необратимые
+  // действия. Раньше отчёт показывал только счётчики в «Итог», но не КАКИЕ файлы (REP-1).
+  const deletionTypes = ['OBFUSCATED_JS', 'METRIC_FILE', 'DEAD_JS_FILE'];
+  const deletions = log.filter((e) => deletionTypes.includes(e.type));
+  if (deletions.length > 0) {
+    L.push(`## 🗑 Удалённые файлы — ${deletions.length} шт. (ПРОВЕРЬТЕ на ложные срабатывания)`, '');
+    L.push(
+      'Файлы убраны со страницы по эвристике (обфускация / metric-сигнатура / 0% coverage). ' +
+        'Восстановление: obfuscated/metric — из `_quarantine/`, любой файл — из `_backup`.',
+      '',
+    );
+    for (const d of deletions) L.push(`- **${d.type}** \`${d.file}\` — ${d.description}`);
+    L.push('');
   }
 
   // Карта макросов
@@ -93,7 +122,7 @@ export function renderReport(
   }
 
   // Предупреждения детекторов (advanced): redirect/keylogger/php
-  const warnTypes = ['REDIRECT_WARN', 'KEYLOGGER_WARN', 'PHP_BACKDOOR', 'JS предупреждение', 'SKIP_DOM'];
+  const warnTypes = ['REDIRECT_WARN', 'KEYLOGGER_WARN', 'PHP_BACKDOOR_WARN', 'JS предупреждение'];
   const warnings = log.filter((e) => warnTypes.includes(e.type));
   if (warnings.length > 0) {
     L.push(`## ⚠️ Предупреждения — ${warnings.length} шт. (проверьте)`, '');

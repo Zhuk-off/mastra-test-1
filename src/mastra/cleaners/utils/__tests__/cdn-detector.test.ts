@@ -57,9 +57,14 @@ describe('genericCdnRepin — репин по СТРУКТУРЕ URL (любая
       .toBe('https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js');
   });
 
-  it('jsdelivr gh-структура', () => {
-    expect(genericCdnRepin('https://fake/gh/user/repo@1.2.3/dist/lib.js'))
-      .toBe('https://cdn.jsdelivr.net/gh/user/repo@1.2.3/dist/lib.js');
+  it('SECURITY (CDN-1): jsdelivr /gh/ НЕ отмывается в trusted (произвольный GitHub-репо)', () => {
+    // Раньше структура /gh/ перестраивалась в cdn.jsdelivr.net/gh/... → «доверенный».
+    // Теперь /gh/ не репинится вовсе → уходит в карантин через allowlist.
+    expect(genericCdnRepin('https://fake/gh/user/repo@1.2.3/dist/lib.js')).toBeNull();
+  });
+
+  it('SECURITY (CDN-1): неизвестный npm-пакет НЕ репинится (любой npm-publish)', () => {
+    expect(genericCdnRepin('https://evil.cdn/npm/attacker-pkg@1.0.0/evil.js')).toBeNull();
   });
 
   it('SECURITY: bare host/<name>@<ver> НЕ репинится (защита от dependency-confusion)', () => {

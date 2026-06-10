@@ -99,6 +99,31 @@ function trackAndShow() {
   });
 });
 
+describe('extractUsefulFunctions — EUF-1: reference-safe удаление', () => {
+  it('pure-exfil функцию, которую ВЫЗЫВАЮТ, не удаляем целиком — обнуляем тело (символ жив)', () => {
+    const source = [
+      `function track(){ fbq('track','x'); }`,
+      `document.addEventListener('click', track);`,
+      `track();`,
+    ].join('\n');
+    const { code, removed } = run(source);
+
+    expect(removed).toBe(1);
+    expect(code).toContain('function track'); // символ сохранён → нет ReferenceError
+    expect(code).not.toContain('fbq'); // exfil вырезан
+    expect(code).toContain('addEventListener'); // место использования цело
+    expect(code).toContain('track()'); // вызов цел
+    expect(parseJs(code, 't.js')).not.toBeNull(); // валидный JS
+  });
+
+  it('pure-exfil функция БЕЗ ссылок — удаляется целиком (как раньше)', () => {
+    const source = `function track(){ fbq('track','x'); }`;
+    const { code, removed } = run(source);
+    expect(removed).toBe(1);
+    expect(code.trim()).toBe('');
+  });
+});
+
 describe('extractUsefulFunctions — несколько функций', () => {
   it('удаляет только treker-функции, оставляя полезные', () => {
     const source = `

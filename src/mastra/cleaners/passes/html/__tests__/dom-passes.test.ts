@@ -6,6 +6,7 @@ import { removeTrackerScripts } from '../remove-tracker-scripts.js';
 import { removeTrackerIframes } from '../remove-tracker-iframes.js';
 import { removeObjectEmbed } from '../remove-object-embed.js';
 import { removeImgPixels } from '../remove-img-pixels.js';
+import { stripDangerousHrefs } from '../strip-dangerous-hrefs.js';
 import { replaceOfferLinks } from '../replace-offer-links.js';
 import { stripEventAttrs } from '../strip-event-attrs.js';
 
@@ -32,6 +33,7 @@ const FIXTURE = `<!DOCTYPE html><html><head>
 <img src="https://www.facebook.com/tr?id=123">
 <a href="https://offer.network/buy?click_id=1">Buy</a>
 <a href="/privacy">Privacy</a>
+<a href="javascript:location='//evil.example/steal'">Жми</a>
 <button onclick="next()">Next</button>
 <button onclick="location.href='http://evil.example/go'">Go</button>
 </body></html>`;
@@ -43,6 +45,7 @@ function runPasses(html: string, ctx: PassContext): string {
     removeTrackerIframes,
     removeObjectEmbed,
     removeImgPixels,
+    stripDangerousHrefs,
     replaceOfferLinks,
     stripEventAttrs,
   ];
@@ -92,8 +95,8 @@ describe('DOM passes — интеграция (cheerio)', () => {
     expect(out).not.toContain('offer.network/buy');
   });
 
-  it('информационная ссылка /privacy сохранена', () => {
-    expect(out).toContain('/privacy');
+  it('относительная /privacy → {offer} (агрессивная политика: вся навигация на оффер)', () => {
+    expect(out).not.toContain('href="/privacy"');
   });
 
   it('простой обработчик onclick="next()" сохранён', () => {
@@ -102,6 +105,12 @@ describe('DOM passes — интеграция (cheerio)', () => {
 
   it('опасный обработчик с http-редиректом снят', () => {
     expect(out).not.toContain('evil.example/go');
+  });
+
+  it('javascript:-href нейтрализован, но текст кнопки сохранён (2D-6)', () => {
+    expect(out).not.toContain('javascript:');
+    expect(out).not.toContain('evil.example/steal');
+    expect(out).toContain('Жми'); // кнопка осталась видимой
   });
 
   it('сомнительное ушло в карантин (не молча удалено)', () => {

@@ -108,7 +108,7 @@
 
 ## PHP
 
-### [PHP-1] 🟢 Soundness (FN) · 🟨 Medium · обфусцированные бэкдоры мимо; узкое покрытие расширений
+### [PHP-1] 🟢 Soundness (FN) · 🟨 Medium · обфусцированные бэкдоры мимо; узкое покрытие расширений (✅ закрыта)
 
 - **Сейчас:** 10 regex прямых форм (`eval($_POST)`, `system($_GET)`, …), **WARN-only**, и только для
   `ext === '.php'` (pipeline).
@@ -137,3 +137,35 @@
    только внешние файлы).
 3. **SVG-1 + SVG-2** — закрыть формы (self-closing script, неквотированные `on*`, plain `href`,
    `javascript:`) — SVG это твой явный вектор «там прячут JS».
+
+---
+
+## ✅ Статус фиксов (C3б)
+
+- **EXT-1 ✅** — `removeTrackerExternals` решает судьбу `_external/<host>/` по `classifyResource`
+  (`https://<host>/`, kind `script` — строжайший trust-set): доверенный CDN → оставить; известный
+  трекер → удалить; **прочий чужой хост → карантин** (`quarantineDir` переносит в
+  `_quarantine/_external/<host>/`, не оставляя локально и не уничтожая). Раньше — голый блок-лист,
+  неизвестный чужой хост выживал. Тест: `passes/fs/__tests__/remove-tracker-externals.test.ts`.
+- **CSS-1 ✅** — `removeTrackerUrls` (для `.css`-файлов) переведён с блок-листа (`urlMatchesTracker`)
+  на `classifyResource(url, 'img')`: неизвестный внешний `url(...)` теперь нейтрализуется в `url('')`
+  (был keep), trusted/own-asset/локальный — сохраняется. Тест: `passes/css/__tests__/remove-tracker-urls.test.ts`.
+- **CSS-2 ✅** — новый DOM-проход `clean-inline-css` чистит трекер-`url()`/`@import` в INLINE CSS:
+  `<style>`-блоках и `style=`-атрибутах (раньше CSS-очистка шла только по внешним `.css`-файлам).
+  Переиспользует те же allowlist-проходы. Подключён в `pipeline` (после `remove-noscript-trackers`).
+  Тест: `passes/html/__tests__/clean-inline-css.test.ts`.
+- **CSS-3 ✅** — макросы во внешнем `.css` теперь сканируются (`scanCssFileMacros`, см. [2c](2c-macros-offer.md)).
+- **SVG-1 ✅ + SVG-2 ✅** — `clean-svg` вынесен в чистую `cleanSvgContent` и закрывает обходы:
+  `<script>` в любой форме (закрытый + self-closing `<script xlink:href=…/>`); `on*` и БЕЗ кавычек;
+  `href` И `xlink:href` (plain SVG2 + `<use>`/`<image>`) на внешний хост ИЛИ с опасной схемой
+  (`javascript:`/`data:` через `dangerousSchemeOf`) → снимаем атрибут; трекер-`url()` в `<style>` внутри
+  SVG (через тот же allowlist, что CSS-1). Остаётся на regex (полный XML-парс — отдельное усиление C7).
+  Тест: `passes/svg/__tests__/clean-svg.test.ts` (11).
+- **PHP-1 ✅** — серверные страницы помимо `.php` (`.phtml`/`.php5`/`.php7`/`.phps`/`.inc`) теперь
+  маршрутизируются как страницы: `stripServerTags` вырезает их серверный код (owner decision #2 —
+  ВЕСЬ чужой серверный код, а не только в `.php`), плюс `detectPhpBackdoors` сканирует их на бэкдоры.
+  Для не-`.php` гейт по `hasServerTags` (не-HTML `.inc` — CSS/JS-партиал — не мангаем cheerio).
+  Узость detection-regex (обфусцированный бэкдор может не дать WARN) стала **moot для удаления**:
+  `stripServerTags` режет ВЕСЬ `<?php…?>`/`<%…%>`-блок целиком, независимо от обфускации внутри —
+  бэкдор уходит, даже если не распознан. Тест: `__tests__/pipeline-php-pages.test.ts` (3).
+- **SM-1, CSS-4** — не трогали; остаются 🆕.

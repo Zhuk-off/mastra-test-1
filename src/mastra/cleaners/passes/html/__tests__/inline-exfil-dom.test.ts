@@ -44,3 +44,36 @@ document.querySelector('#btn').addEventListener('click', function(){ window.scro
     expect(out).not.toContain('sendBeacon');
   });
 });
+
+describe('removeInlineExfilPass — 2D-5: непарсимый inline <script>', () => {
+  it('непарсимый + индикаторы exfil → карантин (удалён + залогирован)', () => {
+    const c = ctx();
+    const out = run(`<html><head><script>fetch( atob(</script></head><body>x</body></html>`, c);
+    expect(out).not.toContain('fetch'); // скрипт изолирован, не глотается тишиной
+    expect(c.quarantine!.some((q) => q.kind === 'inline-script-unparsed')).toBe(true);
+    expect(c.log.some((e) => e.type === 'INLINE_JS_NOT_ANALYZED')).toBe(true);
+  });
+
+  it('непарсимый БЕЗ индикаторов (макро-шаблон {{offer}}) → не трогаем, без шума', () => {
+    const c = ctx();
+    const out = run(`<html><head><script>var x = {{offer}};</script></head><body>x</body></html>`, c);
+    expect(out).toContain('{{offer}}'); // benign шаблон сохранён
+    expect(c.quarantine!.length).toBe(0);
+    expect(c.log.some((e) => e.type === 'INLINE_JS_NOT_ANALYZED')).toBe(false);
+  });
+
+  it('не-JS тип (text/template) с похожим контентом НЕ карантинится', () => {
+    const c = ctx();
+    const out = run(`<html><head><script type="text/template">var t = fetch(</script></head><body>x</body></html>`, c);
+    expect(out).toContain('fetch'); // шаблон не исполняется браузером → не наша забота
+    expect(c.quarantine!.length).toBe(0);
+  });
+
+  it('НЕ-регресс: парсимый безобидный скрипт остаётся', () => {
+    const c = ctx();
+    const out = run(`<html><head><script>var n = 1; show(n);</script></head><body>x</body></html>`, c);
+    expect(out).toContain('show(n)');
+    expect(c.quarantine!.length).toBe(0);
+    expect(c.log.some((e) => e.type === 'INLINE_JS_NOT_ANALYZED')).toBe(false);
+  });
+});

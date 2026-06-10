@@ -73,6 +73,17 @@ describe('analyzeDeadFiles', () => {
     expect(results[0]!.hasEventHandlers).toBe(true);
   });
 
+  it('ANA-1: непарсимый файл при 0% НЕ считается мёртвым (не удаляем непроанализированное)', () => {
+    const siteDir = createTempSite({
+      'js/weird.js': 'function ( { @#$ это не валидный JS )))',
+    });
+    const coverages = [{ relPath: 'js/weird.js', percent: 0 }];
+    const results = analyzeDeadFiles(coverages, siteDir);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.isDead).toBe(false); // раньше: непарсимый → isDead=true → удаление
+    expect(results[0]!.reason).toMatch(/распарс/i);
+  });
+
   it('поддерживает кастомный порог', () => {
     const siteDir = createTempSite({
       'js/low.js': 'console.log("low");',

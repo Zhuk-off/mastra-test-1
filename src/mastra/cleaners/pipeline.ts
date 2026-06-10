@@ -4,8 +4,9 @@ import type { CleanStats, DomPass, PassContext, HtmlStatsDelta, ChangelogEntry, 
 import { extractMainHostFromDir } from './utils/offer-detector.js';
 import { walkFiles } from './utils/walk.js';
 import { writeChangelog } from './utils/changelog.js';
-import { parseHtml, serializeHtml, hasServerTags } from './utils/html-dom.js';
-import { writeQuarantine } from './utils/quarantine.js';
+import { parseHtml, serializeHtml, hasServerTags, stripServerTags } from './utils/html-dom.js';
+import { isAbsoluteUrl } from './utils/allowlist.js';
+import { writeQuarantine, quarantineFile } from './utils/quarantine.js';
 import { writeCleanReport } from './utils/report.js';
 import { cleanSvgFile } from './passes/svg/clean-svg.js';
 import { cleanJsFile, type CleanJsResult } from './passes/js/clean-js.js';
@@ -27,6 +28,7 @@ import { removeTrackerScripts } from './passes/html/remove-tracker-scripts.js';
 import { removeTrackerJsonLd } from './passes/html/remove-tracker-jsonld.js';
 import { removeInlineTrackers } from './passes/html/remove-inline-trackers.js';
 import { removeNoscriptTrackers } from './passes/html/remove-noscript-trackers.js';
+import { cleanInlineCss } from './passes/html/clean-inline-css.js';
 import { removeTrackerLinks } from './passes/html/remove-tracker-links.js';
 import { removeTrackerMetas } from './passes/html/remove-tracker-metas.js';
 import { removeMetaRefresh } from './passes/html/remove-meta-refresh.js';
@@ -34,6 +36,7 @@ import { removeTrackerIframes } from './passes/html/remove-tracker-iframes.js';
 import { removeImgPixels } from './passes/html/remove-img-pixels.js';
 import { removeObjectEmbed } from './passes/html/remove-object-embed.js';
 import { removeFrames } from './passes/html/remove-frames.js';
+import { stripDangerousHrefs } from './passes/html/strip-dangerous-hrefs.js';
 import { replaceOfferLinks } from './passes/html/replace-offer-links.js';
 import { detectMacros } from './passes/html/detect-macros.js';
 import { stripEventAttrs } from './passes/html/strip-event-attrs.js';
@@ -52,6 +55,7 @@ const BASE_DOM_PASSES: DomPass[] = [
   removeTrackerJsonLd,
   removeInlineTrackers,
   removeNoscriptTrackers,
+  cleanInlineCss,            // трекер-url()/@import в inline <style>/style= (CSS-2)
   removeTrackerLinks,        // allowlist <link>
   removeTrackerMetas,
   removeMetaRefresh,
@@ -59,11 +63,22 @@ const BASE_DOM_PASSES: DomPass[] = [
   removeImgPixels,           // allowlist <img src>
   removeObjectEmbed,
   removeFrames,
+  stripDangerousHrefs,       // <a>/<area> href с опасной схемой (javascript:/data:) → нейтрализация (2D-6)
   replaceOfferLinks,
   detectMacros,              // макросы: наши — оставить, чужие — нормализовать/в отчёт
   stripEventAttrs,
   injectCsp,                 // CSP-страховка — последним проходом
 ];
+
+/**
+ * PHP-1: серверные страницы помимо `.php`. Их серверный код/бэкдоры тоже надо вырезать
+ * (owner decision #2: чужой серверный код не используется → вырезать первым делом), иначе
+ * `.phtml`/`.inc` уезжают в прод нетронутыми и даже не сканируются на бэкдоры. Обрабатываем
+ * как HTML-страницу (→ stripServerTags + полная очистка + backdoor-скан), НО (кроме `.php`)
+ * только если в файле реально есть серверные теги — иначе `.inc` может быть не-HTML фрагментом
+ * (CSS/JS-партиал), и cheerio-обёртка его испортит.
+ */
+const PHP_PAGE_EXTRA_EXT = new Set(['.phtml', '.php5', '.php7', '.phps', '.inc']);
 
 function getDomPasses(runAdvanced: boolean): DomPass[] {
   if (!runAdvanced) return BASE_DOM_PASSES;
@@ -74,15 +89,24 @@ function getDomPasses(runAdvanced: boolean): DomPass[] {
   return passes;
 }
 
-function applyHtmlPasses(html: string, ctx: PassContext, runAdvanced: boolean): { html: string; counts: HtmlStatsDelta } {
-  // PHP/ASP-вставки cheerio парсить нельзя — испортит серверные теги. Пропускаем + флаг.
+function applyHtmlPasses(
+  html: string,
+  ctx: PassContext,
+  runAdvanced: boolean,
+): { html: string; counts: HtmlStatsDelta; serverTagsStripped: boolean } {
+  // Серверный код (PHP/ASP) НЕ останавливает очистку (политика владельца C2): чужой
+  // серверный код мы не используем и он несёт риск — вырезаем его ПЕРВЫМ делом и чистим
+  // файл полностью. Свой PHP (spysecure / форма) добавляется на этапе адаптации.
+  let serverTagsStripped = false;
   if (hasServerTags(html)) {
+    html = stripServerTags(html);
+    serverTagsStripped = true;
     ctx.log.push({
       file: ctx.relPath,
-      type: 'SKIP_DOM',
-      description: 'Файл содержит серверные теги (<?php ?> / <% %>) — DOM-проходы пропущены, проверьте вручную.',
+      type: 'SERVER_TAGS_STRIPPED',
+      description:
+        'Серверные теги (<?php ?> / <% %>) удалены, файл очищен. Свой серверный код (spysecure / отправка формы) добавляется на этапе адаптации.',
     });
-    return { html, counts: {} };
   }
 
   const $ = parseHtml(html);
@@ -101,7 +125,46 @@ function applyHtmlPasses(html: string, ctx: PassContext, runAdvanced: boolean): 
   // Финальная косметика — collapse тройных пустых строк
   currentHtml = currentHtml.replace(/\n[ \t]*\n[ \t]*\n+/g, '\n\n');
 
-  return { html: currentHtml, counts: totalCounts };
+  return { html: currentHtml, counts: totalCounts, serverTagsStripped };
+}
+
+/**
+ * PIPE-2: убирает из HTML ссылки на УДАЛЁННЫЕ файлы — одним DOM-проходом (cheerio),
+ * а не 4 копиями regex. Regex промахивался на query-string (`x.js?v=3`), self-closing,
+ * путях из подпапок (`../x.js`), нестандартных кавычках. Резолвит src/href относительно
+ * расположения HTML и сверяет с множеством удалённых абсолютных путей. Серверные файлы
+ * (hasServerTags) пропускает — их cheerio парсить нельзя (PIPE-4).
+ */
+export async function stripRefsToDeletedFiles(siteDir: string, deleted: Set<string>): Promise<void> {
+  if (deleted.size === 0) return;
+  for await (const htmlFile of walkFiles(siteDir)) {
+    const ext = extname(htmlFile).toLowerCase();
+    if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
+    const before = await readFile(htmlFile, 'utf8');
+    if (hasServerTags(before)) continue; // серверные файлы не трогаем (PIPE-4)
+
+    const $ = parseHtml(before);
+    const fileDir = dirname(htmlFile);
+    let changed = false;
+    const pointsToDeleted = (raw: string | undefined): boolean => {
+      if (!raw || isAbsoluteUrl(raw)) return false;
+      const fsUrl = raw.split('?')[0]!.split('#')[0]!;
+      if (!fsUrl) return false;
+      return deleted.has(resolve(fileDir, fsUrl));
+    };
+
+    $('script[src]').each((_i, el) => {
+      if (pointsToDeleted($(el).attr('src'))) { $(el).remove(); changed = true; }
+    });
+    $('link[href]').each((_i, el) => {
+      if (pointsToDeleted($(el).attr('href'))) { $(el).remove(); changed = true; }
+    });
+    $('img[src]').each((_i, el) => {
+      if (pointsToDeleted($(el).attr('src'))) { $(el).remove(); changed = true; }
+    });
+
+    if (changed) await writeFile(htmlFile, serializeHtml($), 'utf8');
+  }
 }
 
 export async function createBackup(siteDir: string): Promise<string> {
@@ -137,6 +200,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     sourceMapsDeleted: 0,
     sourceMapRefsStripped: 0,
     offerLinksReplaced: 0,
+    dangerousHrefsNeutralized: 0,
     bytesBefore: 0,
     bytesAfter: 0,
     deadJsFilesRemoved: 0,
@@ -150,6 +214,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     macrosFlagged: 0,
     cspInjected: 0,
     phpBackdoorWarning: false,
+    serverTagsFilesStripped: 0,
   };
 
   // Нормализуем структуру лендинга: находим главный файл, перемещаем в корень,
@@ -162,6 +227,8 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
   const mainHost = extractMainHostFromDir(siteDir);
   const metricFilesToDelete = new Set<string>();
   const obfuscatedFilesToDelete = new Set<string>();
+  // PIPE-2: абсолютные пути всех удалённых файлов — ссылки на них уберём одним DOM-проходом.
+  const refStripTargets = new Set<string>();
 
   const runAdvanced = options?.runAdvanced ?? false;
 
@@ -186,8 +253,15 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     const ext = extname(file).toLowerCase();
     const relPath = relative(siteDir, file);
 
-    if (ext === '.html' || ext === '.htm' || ext === '.php') {
+    // PIPE-3: изолируем обработку каждого файла — один кривой файл (битый JS/HTML, гонка по ФС)
+    // не должен ронять весь прогон очистки. Ошибка фиксируется в логе, идём дальше.
+    try {
+    const isPhpPage = ext === '.php' || PHP_PAGE_EXTRA_EXT.has(ext); // PHP-1
+    if (ext === '.html' || ext === '.htm' || isPhpPage) {
       const before = await readFile(file, 'utf8');
+      // PHP-1: .phtml/.inc/... обрабатываем как страницу только при наличии серверных тегов —
+      // иначе не-HTML .inc (CSS/JS-партиал) испортится cheerio-обёрткой. .php/.html — как раньше.
+      if (PHP_PAGE_EXTRA_EXT.has(ext) && !hasServerTags(before)) continue;
       stats.bytesBefore += before.length;
 
       const cdnReplacements = await buildCdnReplacements(siteDir, file, before);
@@ -204,7 +278,8 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
         unversionedLibReplacements,
       };
 
-      const { html: after, counts } = applyHtmlPasses(before, ctx, runAdvanced);
+      const { html: after, counts, serverTagsStripped } = applyHtmlPasses(before, ctx, runAdvanced);
+      if (serverTagsStripped) stats.serverTagsFilesStripped++;
       if (after !== before) {
         await writeFile(file, after, 'utf8');
       }
@@ -219,10 +294,10 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
         }
       }
 
-      if (ext === '.php') {
+      if (isPhpPage) {
         stats.phpFilesProcessed++;
         if (runAdvanced) {
-          // Stage 7: PHP backdoor scanning (WARN only, requires --advanced)
+          // Stage 7: PHP backdoor scanning (WARN only, requires --advanced). PHP-1: и для .phtml/.inc.
           const phpWarnings = detectPhpBackdoors(before, relPath);
           if (phpWarnings.length > 0) {
             changelog.push(...phpWarnings);
@@ -247,6 +322,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
       stats.localLibsReplaced += counts.localLibsReplaced ?? 0;
       stats.eventAttrsRemoved += counts.eventAttrsRemoved ?? 0;
       stats.offerLinksReplaced += counts.offerLinksReplaced ?? 0;
+      stats.dangerousHrefsNeutralized += counts.dangerousHrefsNeutralized ?? 0;
       stats.inlineExfilRemoved += counts.inlineExfilRemoved ?? 0;
       stats.cspInjected += counts.cspInjected ?? 0;
       continue;
@@ -260,7 +336,7 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
 
     if (ext === '.js' || ext === '.mjs') {
-      const result: CleanJsResult = await cleanJsFile(file, relPath, changelog, mainHost, runAdvanced);
+      const result: CleanJsResult = await cleanJsFile(file, relPath, changelog, mainHost, runAdvanced, macros);
       stats.jsFilesScanned++;
       if (result.isObfuscated) {
         obfuscatedFilesToDelete.add(file);
@@ -277,91 +353,57 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     }
 
     if (ext === '.css') {
-      const removed = await cleanCssFile(file, relPath, changelog);
+      const removed = await cleanCssFile(file, relPath, changelog, macros);
       stats.cssFilesScanned++;
       stats.cssItemsRemoved += removed;
     }
+    } catch (err) {
+      // PIPE-3: файл пропущен из-за ошибки — фиксируем в логе и продолжаем со следующим.
+      changelog.push({
+        file: relPath,
+        type: 'FILE_SKIPPED_ERROR',
+        description: `Файл пропущен из-за ошибки обработки: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
   }
 
-  // Удаляем метрик-файлы и чистим <script src> в HTML
+  // Удаляем метрик-файлы (содержимое — в карантин). Ссылки уберём ниже одним DOM-проходом.
   if (metricFilesToDelete.size > 0) {
     for (const absPath of metricFilesToDelete) {
+      // C5б: карантин (полное содержимое восстановимо) перед удалением с деплоя.
+      await quarantineFile(absPath, siteDir, quarantine, 'js-metric', 'metric-файл (AST-сигнатура)');
       await unlink(absPath);
+      refStripTargets.add(resolve(absPath));
     }
     stats.metricFilesRemoved += metricFilesToDelete.size;
-
-    // Удаляем <script src="..."> из HTML, ссылающиеся на удалённые файлы
-    for await (const htmlFile of walkFiles(siteDir)) {
-      const ext = extname(htmlFile).toLowerCase();
-      if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
-      const before = await readFile(htmlFile, 'utf8');
-      let after = before;
-      for (const absPath of metricFilesToDelete) {
-        const rel = relative(siteDir, absPath);
-        const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
-        after = after.replace(re, '');
-      }
-      if (after !== before) {
-        await writeFile(htmlFile, after, 'utf8');
-      }
-    }
   }
 
-  // Удаляем обфусцированные JS-файлы и чистим <script src> в HTML
+  // Удаляем обфусцированные JS-файлы (содержимое — в карантин). Ссылки уберём ниже.
   if (obfuscatedFilesToDelete.size > 0) {
     for (const absPath of obfuscatedFilesToDelete) {
+      // C5б: карантин (полное содержимое восстановимо) перед удалением с деплоя.
+      await quarantineFile(absPath, siteDir, quarantine, 'js-obfuscated', 'обфускация (_0x / packer / fromCharCode)');
       await unlink(absPath);
+      refStripTargets.add(resolve(absPath));
     }
     stats.obfuscatedFilesRemoved += obfuscatedFilesToDelete.size;
-
-    for await (const htmlFile of walkFiles(siteDir)) {
-      const ext = extname(htmlFile).toLowerCase();
-      if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
-      const before = await readFile(htmlFile, 'utf8');
-      let after = before;
-      for (const absPath of obfuscatedFilesToDelete) {
-        const rel = relative(siteDir, absPath);
-        const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
-        after = after.replace(re, '');
-      }
-      if (after !== before) {
-        await writeFile(htmlFile, after, 'utf8');
-      }
-    }
   }
 
-  // Удаляем unversioned-lib файлы, заменённые на CDN, и чистим <script src> в HTML
+  // unversioned-lib файлы заменены на CDN в HTML; локальные оригиналы удаляем, остаточные ссылки уберём ниже.
   if (unversionedLibFilesToDelete.size > 0) {
     for (const absPath of unversionedLibFilesToDelete) {
       try {
         await unlink(absPath);
+        refStripTargets.add(resolve(absPath));
       } catch {
         // файл уже удалён или не существует — игнорируем
       }
     }
     stats.unversionedLibsCdn += unversionedLibFilesToDelete.size;
-
-    for await (const htmlFile of walkFiles(siteDir)) {
-      const ext = extname(htmlFile).toLowerCase();
-      if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
-      const before = await readFile(htmlFile, 'utf8');
-      let after = before;
-      for (const absPath of unversionedLibFilesToDelete) {
-        const rel = relative(siteDir, absPath);
-        const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
-        after = after.replace(re, '');
-      }
-      if (after !== before) {
-        await writeFile(htmlFile, after, 'utf8');
-      }
-    }
   }
 
-  // Удаляем папки _external/<tracker-host>/
-  stats.externalDirsRemoved = await removeTrackerExternals(siteDir);
+  // Папки _external/<host>/ — через белый список (трекер→удалить, чужой→карантин). EXT-1.
+  stats.externalDirsRemoved = await removeTrackerExternals(siteDir, quarantine);
 
   // Удаляем source maps
   const { mapsDeleted, filesStripped } = await removeSourceMaps(siteDir);
@@ -377,10 +419,13 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
       options.deadCoverageThreshold ?? 1,
     );
 
-    const deadFilesToDelete = new Set<string>();
     for (const file of deadFiles) {
       if (!file.isDead) continue;
       const absPath = join(siteDir, file.relPath);
+      // COV-1/C5: coverage-эвристика FP-склонна (интерактивный/утилитный код лендинга
+      // часто 0% за быстрый авто-прогон). Карантин (восстановимо) вместо тихого rm —
+      // как для obfuscated/metric. Файл всё равно убираем с деплоя, но не теряем.
+      await quarantineFile(absPath, siteDir, quarantine, 'js-dead-coverage', file.reason);
       try {
         await rm(absPath, { force: true });
       } catch {
@@ -392,27 +437,13 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
         type: 'DEAD_JS_FILE',
         description: file.reason,
       });
-      deadFilesToDelete.add(absPath);
-    }
-
-    if (deadFilesToDelete.size > 0) {
-      for await (const htmlFile of walkFiles(siteDir)) {
-        const ext = extname(htmlFile).toLowerCase();
-        if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
-        const before = await readFile(htmlFile, 'utf8');
-        let after = before;
-        for (const absPath of deadFilesToDelete) {
-          const rel = relative(siteDir, absPath);
-          const escaped = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const re = new RegExp(`<script[^>]*\\bsrc\\s*=\\s*["'](?:\\./)?/?${escaped}["'][^>]*>\\s*</script>`, 'gi');
-          after = after.replace(re, '');
-        }
-        if (after !== before) {
-          await writeFile(htmlFile, after, 'utf8');
-        }
-      }
+      refStripTargets.add(resolve(absPath));
     }
   }
+
+  // PIPE-2: одним DOM-проходом убираем ссылки на ВСЕ удалённые файлы (metric/obfuscated/
+  // unversioned/dead) — вместо 4 копий regex (промахи на query-string/self-close/../).
+  await stripRefsToDeletedFiles(siteDir, refStripTargets);
 
   // Сбрасываем карантин на диск (после всех обходов файлов)
   await writeQuarantine(siteDir, quarantine);

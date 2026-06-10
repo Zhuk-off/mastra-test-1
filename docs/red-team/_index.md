@@ -72,131 +72,132 @@
 
 | ID | Файл | Sev | Угол | Суть | Статус |
 |----|------|-----|------|------|--------|
-| AL-1 | allowlist.ts | 🟥 | Bypass | `data:`/`blob:`/`javascript:` в script/iframe → `keep` | 🆕 |
-| AL-2 | allowlist.ts | 🟧 | Bypass | Ведущие/внутренние пробел/таб/перевод строки обходят `isAbsoluteUrl` | 🆕 |
-| AL-3 | allowlist.ts | 🟧 | Bypass | Мультитенантные CDN (jsdelivr `/gh/`, unpkg) доверены пословно | 🆕 |
+| AL-1 | allowlist.ts | 🟥 | Bypass | `data:`/`blob:`/`javascript:` в script/iframe → `keep` | ✅ |
+| AL-2 | allowlist.ts | 🟧 | Bypass | Ведущие/внутренние пробел/таб/перевод строки обходят `isAbsoluteUrl` | ✅ |
+| AL-3 | allowlist.ts | 🟧 | Bypass | Мультитенантные CDN (jsdelivr `/gh/`, unpkg) доверены пословно | ✅ |
 | AL-4 | allowlist.ts | 🟨 | Soundness | Плоский trust-set: font/CSS-хост доверен и для `script` | 🆕 |
-| URL-1 | url.ts | 🟧 | Bypass | `extractHostname` для относительного URL возвращает `example.com` | 🆕 |
+| URL-1 | url.ts | 🟧 | Bypass | `extractHostname` для относительного URL возвращает `example.com` | ✅ |
 | URL-2 | url.ts | 🟨 | Soundness | Два оракула доверия расходятся (`isExternalUrl` vs `classifyResource`) | 🆕 |
 | URL-3 | url.ts | 🟩 | Soundness | Подстрочный матч трекера → возможны FP (только remove↔quarantine) | 🆕 |
 | URL-4 | url.ts | 🟩 | Bypass | Нет нормализации IDN/punycode (для keep безопасно, для remove — пропуск) | 🆕 |
 | POL-1 | policy.ts | 🟧 | Soundness | CSP-«страховка» слаба: `script-src 'unsafe-inline'` + `img-src facebook` | 🆕 |
-| POL-2 | policy.ts | 🟨 | Bypass | CSP доверяет мультитенантным CDN (jsdelivr/tailwind) | 🆕 |
+| POL-2 | policy.ts | 🟨 | Bypass | CSP доверяет мультитенантным CDN (jsdelivr/tailwind) | ✅ |
 | POL-3 | policy.ts | 🟨 | Robustness | Хосты/макросы захардкожены под одного владельца | 🆕 |
 | POL-4 | policy.ts | 🟩 | Soundness | `isOwnMacro` регистрозависим (`{OFFER}` → чужой) | 🆕 |
-| DOM-1 | html-dom.ts | 🟥 | Bypass/Robust | `hasServerTags` FP (`<%`, текст `<? `) → ВСЯ очистка пропущена | 🆕 |
+| DOM-1 | html-dom.ts | 🟥 | Bypass/Robust | `hasServerTags` FP (`<%`, текст `<? `) → ВСЯ очистка пропущена | ✅ |
 | DOM-2 | html-dom.ts | 🟨 | Robustness | cheerio фабрикует `html/head/body`, переписывает структуру | 🆕 |
 | DOM-3 | html-dom.ts | 🟨 | Soundness | `<noscript>` = текст, DOM-селекторы не видят трекеры внутри | 🆕 |
 | DOM-4 | html-dom.ts | 🟨 | Robustness | `</script>` в строке ломает round-trip | 🆕 |
-| PIPE-1 | pipeline.ts | 🟥 | Bypass | Серверный тег → `applyHtmlPasses` тихо возвращает HTML как есть | 🆕 |
-| PIPE-2 | pipeline.ts | 🟧 | Bypass/Robust | Удаление `<script src>` регэкспом мимо DOM (query/`../`/self-close промахи) | 🆕 |
-| PIPE-3 | pipeline.ts | 🟨 | Robustness | Нет try/catch по файлу — один кривой файл роняет весь прогон | 🆕 |
-| PIPE-4 | pipeline.ts | 🟨 | Bypass | Пост-обработка правит даже SKIP_DOM-нутые серверные файлы | 🆕 |
+| PIPE-1 | pipeline.ts | 🟥 | Bypass | Серверный тег → `applyHtmlPasses` тихо возвращает HTML как есть | ✅ |
+| PIPE-2 | pipeline.ts | 🟧 | Bypass/Robust | Удаление `<script src>` регэкспом мимо DOM (query/`../`/self-close промахи) | ✅ |
+| PIPE-3 | pipeline.ts | 🟨 | Robustness | Нет try/catch по файлу — один кривой файл роняет весь прогон | ✅ |
+| PIPE-4 | pipeline.ts | 🟨 | Bypass | Пост-обработка правит даже SKIP_DOM-нутые серверные файлы | ✅ |
 | PIPE-6 | pipeline.ts | 🟨 | Robust/Perf | Сетевой репин-фетч в горячем цикле, фолбэк неясен | 🆕 |
 | PIPE-5 | pipeline.ts | 🟩 | Low | `bytes*` = UTF-16 length; схлопывание `\n` задевает `<pre>` | 🆕 |
-| NORM-1 | normalize-…ts | 🟥 | Bypass/Safety | Path traversal `../` → перенос+удаление файлов вне siteDir | 🆕 |
-| NORM-2 | normalize-…ts | 🟧 | Bypass/Robust | PHP-стрип только главного файла, требует `?>`; ASP/вторичные мимо | 🆕 |
-| NORM-3 | normalize-…ts | 🟧 | Robustness | Неполный сбор ссылок (lazy-load/poster/@import) + переезд → битые ссылки | 🆕 |
+| NORM-1 | normalize-…ts | 🟥 | Bypass/Safety | Path traversal `../` → перенос+удаление файлов вне siteDir | ✅ |
+| NORM-2 | normalize-…ts | 🟧 | Bypass/Robust | PHP-стрип только главного файла, требует `?>`; ASP/вторичные мимо | ✅ |
+| NORM-3 | normalize-…ts | 🟧 | Robustness | Неполный сбор ссылок (lazy-load/poster/@import) + переезд → битые ссылки | ✅ |
 | NORM-4 | normalize-…ts | 🟨 | Robustness | Замена ссылок контекстно-слепа (бьёт inline-JS/meta) | 🆕 |
 | NORM-5 | normalize-…ts | 🟨 | Robustness | `stripPhpCode` рвёт разметку (`href="<?…?>"` → `href=""`) | 🆕 |
-| NORM-6 | normalize-…ts | 🟨 | Robustness | Выбор главного файла узкий (.html/.htm/.php) и недетерминирован | 🆕 |
+| NORM-6 | normalize-…ts | 🟨 | Robustness | Выбор главного файла узкий (.html/.htm/.php) и недетерминирован | ✅ |
 | NORM-7 | normalize-…ts | 🟩 | Low | Пробел в URL; UTF-16 мисскоринг; `@import "x"` без url() | 🆕 |
-| CDN-1 | cdn-detector.ts | 🟧 | Bypass | Генерик-репин отмывает чужой хост (`/npm`,`/gh`) в trusted jsdelivr | 🆕 |
+| CDN-1 | cdn-detector.ts | 🟧 | Bypass | Генерик-репин отмывает чужой хост (`/npm`,`/gh`) в trusted jsdelivr | ✅ |
 | CDN-2 | cdn-detector.ts | 🟨 | Soundness | «Репин+SRI» = ложное чувство защиты (SRI ≠ происхождение) | 🆕 |
 | CDN-3 | cdn-detector.ts | 🟨 | Soundness | Версия берётся из первого токена URL → мисверсия | 🆕 |
 | CDN-4 | cdn-detector.ts | 🟨 | Robust/Perf | Кэш фиксирует сетевой сбой на весь прогон; нет TTL | 🆕 |
 | CDN-5 | cdn-detector.ts | 🟩 | Low | Осиротевший локальный файл после hard-репина не удаляется | 🆕 |
-| UCDN-1 | unversioned-cdn.ts | 🟧 | Robustness | SRI от ЛОКАЛЬНОГО файла, src→CDN → mismatch → блок скрипта | 🆕 |
-| UCDN-2 | unversioned-cdn.ts | 🟨 | Robustness | Нет проверки существования CDN-URL (404 + mismatch) | 🆕 |
+| UCDN-1 | unversioned-cdn.ts | 🟧 | Robustness | SRI от ЛОКАЛЬНОГО файла, src→CDN → mismatch → блок скрипта | ✅ |
+| UCDN-2 | unversioned-cdn.ts | 🟨 | Robustness | Нет проверки существования CDN-URL (404 + mismatch) | ✅ |
 | UCDN-3 | unversioned-cdn.ts | 🟨 | Soundness | Версия из 4КБ + fallback → мисверсия минифицированных либ | 🆕 |
 | UCDN-4 | unversioned-cdn.ts | 🟩 | Soundness | FP по баннеру (безопасно, но громко ломает через SRI) | 🆕 |
 | RLL-1 | replace-local-libs…ts | 🟨 | Robustness | Ключ карты — сырой regex-URL, матч по cheerio → промах репина | 🆕 |
 | RLL-2 | replace-local-libs…ts | 🟩 | Low | Ветка «без SRI: офлайн» фактически мёртвая | 🆕 |
 | RLL-3 | replace-local-libs…ts | 🟨 | Архитектура | Полное доверие карте до allowlist — материализует CDN-1 | 🆕 |
-| 2A-1 | remove-tracker-{scripts,iframes},img-pixels | 🟧 | Bypass | URL не нормализуется → whitespace-обход (AL-2, подтверждён) | 🆕 |
-| 2A-2 | remove-tracker-{scripts,iframes} | 🟧 | Bypass | `data:`/`javascript:` в src → keep (AL-1, в 2a не ловится) | 🆕 |
-| 2A-3 | remove-tracker-links | 🟨 | Bypass | preconnect/preload — блок-лист; modulepreload/мульти-rel мимо | 🆕 |
-| 2A-4 | remove-noscript-trackers | 🟨 | Bypass | `<noscript>` allowlist-слеп: блок-лист → неизвестное выживает | 🆕 |
+| 2A-1 | remove-tracker-{scripts,iframes},img-pixels | 🟧 | Bypass | URL не нормализуется → whitespace-обход (AL-2, подтверждён) | ✅ |
+| 2A-2 | remove-tracker-{scripts,iframes} | 🟧 | Bypass | `data:`/`javascript:` в src → keep (AL-1, в 2a не ловится) | ✅ |
+| 2A-3 | remove-tracker-links | 🟨 | Bypass | preconnect/preload — блок-лист; modulepreload/мульти-rel мимо | ✅ |
+| 2A-4 | remove-noscript-trackers | 🟨 | Bypass | `<noscript>` allowlist-слеп: блок-лист → неизвестное выживает | ✅ |
 | 2A-5 | remove-inline-trackers | 🟨 | Soundness | Только вендор-сниппеты; кастомный inline-exfil не здесь (→2d) | 🆕 |
 | 2B-1 | remove-base | 🟨 | Robustness | `<base>` вырезается вслепую + normalize base-неосведомлён → битые пути | 🆕 |
-| 2B-2 | remove-meta-refresh | 🟨 | Bypass | Относительный и закавыченный url-refresh переживают | 🆕 |
+| 2B-2 | remove-meta-refresh | 🟨 | Bypass | Относительный и закавыченный url-refresh переживают | ✅ |
 | 2B-3 | remove-object-embed | 🟩 | Robustness | `<object>` с fallback удаляется целиком; embed наследует 2A | 🆕 |
 | 2B-4 | remove-frames | 🟩 | Robustness | Настоящий frameset-лендинг → пустая страница | 🆕 |
 | 2B-5 | remove-tracker-metas | 🟩 | Soundness | Узкий блок-лист (нет robots/индексации, `property=`) | 🆕 |
 | 2B-6 | remove-tracker-jsonld | 🟩 | Soundness | Узко и инертно (regex по тексту, не JSON-parse) | 🆕 |
-| MAC-1 | detect-macros | 🟨 | Soundness | Внешние `.js`/`.css` на макросы не сканируются (твой пример) | 🆕 |
+| MAC-1 | detect-macros | 🟨 | Soundness | Внешние `.js`/`.css` на макросы не сканируются (твой пример) | ✅ |
 | MAC-2 | detect-macros | 🟨 | Soundness | Только `{...}`; `[..]`/`%..%`/`{{..}}` мимо | 🆕 |
 | MAC-3 | detect-macros | 🟨 | Soundness | Template-скрипты/непарсимый inline-JS пропускаются | 🆕 |
 | MAC-4 | detect-macros | 🟩 | Soundness | В CSS макрос ищется только в `url()` (не `content:`) | 🆕 |
 | MAC-5 | detect-macros | 🟩 | Soundness | Авто-`{offer}` только для `<a>`/`<area>` | 🆕 |
-| OFFER-1 | offer-detector | 🟨 | Robustness | Любая внешняя не-trusted ссылка → `{offer}` (соцсети/правовые ломаются) | 🆕 |
-| OFFER-2 | offer-detector | 🟨 | Soundness | Нераспознанный same-host оффер сохраняет ЧУЖОЙ URL | 🆕 |
-| OFFER-3 | offer-detector | 🟩 | Soundness | Декод только `&amp;`; относительные офферы не ловятся | 🆕 |
-| 2D-1 | allowlist.ts (сквозь) | 🟧 | Bypass | `data:`/`javascript:`/`blob:` в src/href не ловит НИКТО (T-3) | 🆕 |
-| 2D-2 | strip-event-attrs | 🟨 | Bypass | `on*` снимается только при литеральном url/keyword; обфускация мимо | 🆕 |
-| 2D-3 | event-attrs.ts | 🟨 | Bypass | Реестр `on*` неполон — нет touch/pointer/wheel (mobile) | 🆕 |
-| 2D-4 | inject-csp | 🟩 | Robustness | Размещение ок (T-4); но SKIP_DOM-файлы без CSP (← PIPE-1) | 🆕 |
-| 2D-5 | remove-inline-exfil-pass | 🟨 | Граница | Непарсимый inline-script молча пропущен; detect — Тир 3 | 🆕 |
-| CJS-1 | clean-js | 🟧 | Correctness | Устаревший AST: docWrite режет по смещённым позициям после extract | 🆕 |
-| CJS-2 | clean-js | 🟨 | Robustness | `detectObfuscation` удаляет весь файл (без карантина) — FP на минифик. либе | 🆕 |
-| CJS-3 | clean-js | 🟨 | Robustness | Парс не удался → все AST-детекторы молча пропущены | 🆕 |
-| CJS-4 | clean-js | 🟨 | Robustness | regex SW/eval ломает JS → каскадом глушит AST | 🆕 |
-| CJS-5 | clean-js | 🟨 | Soundness | Макросы во внешних `.js` не сканируются (T-8) | 🆕 |
+| OFFER-1 | offer-detector | 🟨 | Robustness | Любая внешняя не-trusted ссылка → `{offer}` (соцсети/правовые ломаются) | 🚫 |
+| OFFER-2 | offer-detector | 🟨 | Soundness | Нераспознанный same-host оффер сохраняет ЧУЖОЙ URL | ✅ |
+| OFFER-3 | offer-detector | 🟩 | Soundness | Декод только `&amp;`; относительные офферы не ловятся | ✅ |
+| 2D-1 | allowlist.ts (сквозь) | 🟧 | Bypass | `data:`/`javascript:`/`blob:` в src/href не ловит НИКТО (T-3) | ✅ |
+| 2D-2 | strip-event-attrs | 🟨 | Bypass | `on*` снимается только при литеральном url/keyword; обфускация мимо | ✅ |
+| 2D-3 | strip-event-attrs | 🟨 | Bypass | Реестр `on*` неполон — нет touch/pointer/wheel (mobile) | ✅ |
+| 2D-4 | inject-csp | 🟩 | Robustness | Размещение ок (T-4); но SKIP_DOM-файлы без CSP (← PIPE-1) | ✅ |
+| 2D-5 | remove-inline-exfil-pass | 🟨 | Граница | Непарсимый inline-script молча пропущен; detect — Тир 3 | ✅ |
+| 2D-6 | strip-dangerous-hrefs (new pass) | 🟧 | Bypass | `<a href="javascript:/data:">` не проходит `classifyResource` → выживает (остаток C1: классификатор готов, проход не подключён) | ✅ |
+| CJS-1 | clean-js | 🟧 | Correctness | Устаревший AST: docWrite режет по смещённым позициям после extract | ✅ |
+| CJS-2 | clean-js | 🟨 | Robustness | `detectObfuscation` удаляет весь файл (без карантина) — FP на минифик. либе | ✅ |
+| CJS-3 | clean-js | 🟨 | Robustness | Парс не удался → все AST-детекторы молча пропущены | ✅ |
+| CJS-4 | clean-js | 🟨 | Robustness | regex SW/eval ломает JS → каскадом глушит AST | ✅ |
+| CJS-5 | clean-js | 🟨 | Soundness | Макросы во внешних `.js` не сканируются (T-8) | ✅ |
 | CJS-6 | clean-js | 🟩 | Soundness | warn-слой не гейтит выгрузку | 🆕 |
-| EVAL-1 | remove-eval-obfuscation | 🟨 | Soundness | Узкая регулярка: `window.atob`/`new Function`/`(0,eval)` мимо | 🆕 |
-| EVAL-2 | remove-eval-obfuscation | 🟨 | Robustness | Удаление eval в выражении ломает JS (`var x = eval…`) | 🆕 |
-| SW-1 | remove-service-worker | 🟨 | Robustness | Вложенные скобки в register() корёжат JS | 🆕 |
-| SW-2 | remove-service-worker | 🟩 | Soundness | Только литеральный `navigator.serviceWorker.register` | 🆕 |
+| EVAL-1 | detect-eval-obfuscation | 🟨 | Soundness | Узкая регулярка: `window.atob`/`new Function`/`(0,eval)` мимо | ✅ |
+| EVAL-2 | detect-eval-obfuscation | 🟨 | Robustness | Удаление eval в выражении ломает JS (`var x = eval…`) | ✅ |
+| SW-1 | detect-service-worker | 🟨 | Robustness | Вложенные скобки в register() корёжат JS | ✅ |
+| SW-2 | detect-service-worker | 🟩 | Soundness | Только литеральный `navigator.serviceWorker.register` | ✅ |
 | WARN-1 | js-warning-patterns | 🟩 | Robustness | `while(re.exec)` зависнет, если паттерн без `/g` (латентно) | 🆕 |
-| PARSE-1 | ast/parse | 🟨 | Bypass | acorn не парсит Annex B `<!--` → AST-анализ пропущен | 🆕 |
-| PARSE-2 | ast/parse | 🟨 | Robustness | Ошибка парса только в `console.warn`, не в отчёте | 🆕 |
+| PARSE-1 | ast/parse | 🟨 | Bypass | acorn не парсит Annex B `<!--` → AST-анализ пропущен | ✅ |
+| PARSE-2 | ast/parse | 🟨 | Robustness | Ошибка парса только в `console.warn`, не в отчёте | 🛠 |
 | PARSE-3 | ast/parse | 🟩 | Robustness | module-first; нет лимита размера/времени парса | 🆕 |
-| RIE-1 | remove-inline-exfil | 🟨 | Robustness | Удаление по узлу: `var x = fetch()` → `var x = ;` (зависит от 3c) | 🆕 |
-| EUF-1 | extract-useful-functions | 🟧 | Robustness | Удаляется объявление функции без мест вызова → ReferenceError | 🆕 |
-| EUF-2 | extract-useful-functions | 🟨 | Soundness | Внешние `.js`: режутся только целые функции, не рассыпанный exfil | 🆕 |
+| RIE-1 | remove-inline-exfil | 🟨 | Robustness | Удаление по узлу: `var x = fetch()` → `var x = ;` (зависит от 3c) | ✅ |
+| EUF-1 | extract-useful-functions | 🟧 | Robustness | Удаляется объявление функции без мест вызова → ReferenceError | ✅ |
+| EUF-2 | extract-useful-functions | 🟨 | Soundness | Внешние `.js`: режутся только целые функции, не рассыпанный exfil | ✅ |
 | EUF-3 | extract-useful-functions | 🟩 | Soundness | Консервативные пропуски (мульти-декл/arrow-expr); узкий DOM-список | 🆕 |
 | IDX-1 | js-advanced/index | 🟩 | Гигиена | Пустая заглушка (мёртвый плейсхолдер) | 🆕 |
-| DET-1 | detectors (общее) | 🟧 | Bypass | Детект только ЛИТЕРАЛЬНОЙ строки-URL → вычисляемый URL мимо | 🆕 |
-| DET-2 | detectors (общее) | 🟧 | Bypass | Только прямой вызов точной формы → алиас/`window.fetch`/`img.src` мимо | 🆕 |
-| DET-3 | detectors (общее) | 🟨 | Bypass | `//host` обходит (new URL без базы); 3 копии isExternalUrl | 🆕 |
-| DEC-1 | detect-exfil-calls | 🟨 | Robustness | Узел = CallExpression → `var x=fetch()` → `var x=;` (T-9) | 🆕 |
-| DEC-2 | detect-exfil-calls | 🟨 | Soundness | Короткие `ga`/`hj`/`zE` → FP-удаление своей функции | 🆕 |
-| OBF-1 | detect-obfuscation | 🟨 | Soundness | 3 узкие сигнатуры: FN + FP-delete легит-минификата | 🆕 |
-| MET-1 | detect-metric-file | 🟨 | Soundness | «Полезный код» = 5 подстрок → FP-delete файла с логикой | 🆕 |
-| RED-1 | detect-redirect | 🟨 | Policy/FN | Редирект только WARN; `assign`/`top`/косвенность мимо | 🆕 |
-| KEY-1 | detect-keylogger | 🟨 | Policy/FN | Keylogger только WARN; `onkeydown=`-присваивание мимо | 🆕 |
-| DOC-1 | detect-document-write-script | 🟨 | Soundness | Только литерал + `<script src>`; склейка/iframe/img мимо | 🆕 |
-| COV-1 | collect/analyze-coverage | 🟧 | Robustness | Coverage удаляет интерактивный/утилитный JS как «мёртвый» | 🆕 |
-| ANA-1 | analyze-coverage | 🟨 | Robustness | Непарсимый кандидат → «мёртвый» → удаление | 🆕 |
+| DET-1 | detectors (общее) | 🟧 | Bypass | Детект только ЛИТЕРАЛЬНОЙ строки-URL → вычисляемый URL мимо | ✅ |
+| DET-2 | detectors (общее) | 🟧 | Bypass | Только прямой вызов точной формы → алиас/`window.fetch`/`img.src` мимо | ✅ |
+| DET-3 | detectors (общее) | 🟨 | Bypass | `//host` обходит (new URL без базы); 3 копии isExternalUrl | ✅ |
+| DEC-1 | detect-exfil-calls | 🟨 | Robustness | Узел = CallExpression → `var x=fetch()` → `var x=;` (T-9) | ✅ |
+| DEC-2 | detect-exfil-calls | 🟨 | Soundness | Короткие `ga`/`hj`/`zE` → FP-удаление своей функции | ✅ |
+| OBF-1 | detect-obfuscation | 🟨 | Soundness | 3 узкие сигнатуры: FN + FP-delete легит-минификата | 🛠 |
+| MET-1 | detect-metric-file | 🟨 | Soundness | «Полезный код» = 5 подстрок → FP-delete файла с логикой | 🛠 |
+| RED-1 | detect-redirect | 🟨 | Policy/FN | Редирект только WARN; `assign`/`top`/косвенность мимо | ✅ |
+| KEY-1 | detect-keylogger | 🟨 | Policy/FN | Keylogger только WARN; `onkeydown=`-присваивание мимо | ✅ |
+| DOC-1 | detect-document-write-script | 🟨 | Soundness | Только литерал + `<script src>`; склейка/iframe/img мимо | ✅ |
+| COV-1 | collect/analyze-coverage | 🟧 | Robustness | Coverage удаляет интерактивный/утилитный JS как «мёртвый» | ✅ |
+| ANA-1 | analyze-coverage | 🟨 | Robustness | Непарсимый кандидат → «мёртвый» → удаление | ✅ |
 | COV-2 | collect-coverage | 🟨 | Robustness | Таймаут networkidle роняет весь cleanSite | 🆕 |
 | COV-3 | collect-coverage | 🟩 | Security | `startsWith(siteDir)` — prefix-обход в статик-сервере | 🆕 |
 | COV-4 | collect-coverage | 🟩 | Security | Исполняет остаточный JS (сеть наружу заблокирована) | 🆕 |
 | VIS-2 | verify-visual | 🟨 | Robustness | Диф только вьюпорта (fullPage:false) — оффер ниже мимо | 🆕 |
 | VIS-3 | verify-visual | 🟨 | Robustness | Скриншот без блока внешних → редирект/exfil искажает диф | 🆕 |
 | VIS-1 | verify-visual | 🟩 | Гигиена | Не подключён в авто-очистку (утилита) | 🆕 |
-| EXT-1 | remove-tracker-externals | 🟧 | Bypass | `_external/` ломает «relative=keep»: чужой хост выживает локально | 🆕 |
+| EXT-1 | remove-tracker-externals | 🟧 | Bypass | `_external/` ломает «relative=keep»: чужой хост выживает локально | ✅ |
 | EXT-2 | remove-tracker-externals | 🟩 | Robustness | Висячие ссылки после удаления `_external/` | 🆕 |
-| CSS-1 | remove-tracker-urls | 🟨 | Bypass | CSS `url()` — блок-лист; неизвестный внешний ресурс остаётся | 🆕 |
-| CSS-2 | css (inline) | 🟨 | Bypass | Inline `<style>`/`style=` не чистятся от трекер-url() | 🆕 |
-| CSS-3 | clean-css | 🟨 | Soundness | Макросы во внешнем CSS не сканируются (T-8) | 🆕 |
+| CSS-1 | remove-tracker-urls | 🟨 | Bypass | CSS `url()` — блок-лист; неизвестный внешний ресурс остаётся | ✅ |
+| CSS-2 | css (inline) | 🟨 | Bypass | Inline `<style>`/`style=` не чистятся от трекер-url() | ✅ |
+| CSS-3 | clean-css | 🟨 | Soundness | Макросы во внешнем CSS не сканируются (T-8) | ✅ |
 | CSS-4 | css | 🟩 | Bypass | `url(//evil)`/`@import //` обход; косметика номера строки | 🆕 |
-| SVG-1 | clean-svg | 🟨 | Bypass | self-closing/`href`-only `<script>`, неквотированные `on*` мимо | 🆕 |
-| SVG-2 | clean-svg | 🟨 | Bypass | plain `href` (SVG2), `javascript:`, `<style>` в SVG не покрыты | 🆕 |
-| PHP-1 | detect-php-backdoors | 🟨 | Soundness | Обфусцированные бэкдоры мимо; `.phtml`/`.inc` не сканируются; WARN | 🆕 |
+| SVG-1 | clean-svg | 🟨 | Bypass | self-closing/`href`-only `<script>`, неквотированные `on*` мимо | ✅ |
+| SVG-2 | clean-svg | 🟨 | Bypass | plain `href` (SVG2), `javascript:`, `<style>` в SVG не покрыты | ✅ |
+| PHP-1 | detect-php-backdoors | 🟨 | Soundness | Обфусцированные бэкдоры мимо; `.phtml`/`.inc` не сканируются; WARN | ✅ |
 | SM-1 | remove-source-maps | 🟩 | Perf | Второй полный обход + двойной I/O | 🆕 |
-| REP-1 | report.ts | 🟨 | Workflow | Отчёт скрывает удаления + баг типа `PHP_BACKDOOR_WARN` | 🆕 |
+| REP-1 | report.ts | 🟨 | Workflow | Отчёт скрывает удаления + баг типа `PHP_BACKDOOR_WARN` | ✅ |
 | QUAR-1 | quarantine.ts | 🟨 | Robustness | `_quarantine/`/отчёт/лог внутри siteDir → уезжают в прод | 🆕 |
-| WALK-1 | walk.ts | 🟨 | Robustness | Нет try/catch на обходе → одна папка роняет cleanSite | 🆕 |
+| WALK-1 | walk.ts | 🟨 | Robustness | Нет try/catch на обходе → одна папка роняет cleanSite | ✅ |
 | QUAR-2 | quarantine.ts | 🟩 | Soundness | Сниппет обрезан 2000 — превью, не источник восстановления | 🆕 |
 | REP-2 | report.ts | 🟩 | Robustness | Warnings обрезаны до 100 | 🆕 |
 | REP-4 | report.ts | 🟩 | UX | «Всё классифицировано однозначно» при пустом карантине | 🆕 |
 | CHG-1 | changelog.ts | 🟩 | Robustness | pipe-формат ломается на `|`/переносах в сниппете | 🆕 |
 | WALK-2 | walk.ts | 🟩 | Strength/FN | Симлинки не следуются (хорошо для safety; минорный FN) | 🆕 |
-| VR-1 | verify-runtime | 🟧 | Bypass | Verify только пассивная загрузка → exfil по клику не ловится (ложное ok) | 🆕 |
+| VR-1 | verify-runtime | 🟧 | Bypass | Verify только пассивная загрузка → exfil по клику не ловится (ложное ok) | ✅ |
 | VR-2 | verify-runtime | 🟨 | Robustness | Проверяется только index.html (многостраничные мимо) | 🆕 |
 | VR-3 | verify-runtime | 🟨 | Security | Verify исполняет (не блокирует) чужие запросы | 🆕 |
 | DL-2 | download-site | 🟨 | Security | Загрузка исполняет грязный лендинг (exfil во время захвата) | 🆕 |
-| CST-1 | clean-site-tool | 🟨 | Workflow | Не отдаёт путь к `clean-report.md` (safety-net теряется) | 🆕 |
+| CST-1 | clean-site-tool | 🟨 | Workflow | Не отдаёт путь к `clean-report.md` (safety-net теряется) | ✅ |
 | CST-2 | clean-site-tool | 🟩 | Workflow | `noBackup` опасен при необратимых удалениях | 🆕 |
 | DL-1 | download-site | 🟩 | Контекст | T-7 ✅ (base-aware) + EXT-1 подтверждён (`_external/`) | 🆕 |
 

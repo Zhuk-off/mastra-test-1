@@ -1,32 +1,8 @@
 import * as walk from 'acorn-walk';
 import type { Program, Node } from 'acorn';
-import { isTrustedHost } from '../../../registry/trusted-hosts.js';
 import type { DetectionResult, DetectorContext } from '../ast/types.js';
 import { posToLine, snippetAt } from '../ast/parse.js';
-
-function isExternalUrl(url: string, mainHost: string): boolean {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname;
-    if (isTrustedHost(host)) return false;
-    if (host === mainHost || host.endsWith('.' + mainHost)) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function extractStringArg(node: unknown): string | null {
-  if (
-    node &&
-    typeof node === 'object' &&
-    (node as { type?: string }).type === 'Literal' &&
-    typeof (node as { value?: unknown }).value === 'string'
-  ) {
-    return (node as { value: string }).value;
-  }
-  return null;
-}
+import { isExternalUrl, extractStringish, obfuscatedDecoderIn, isLocationRef, memberPropName } from './helpers.js';
 
 /**
  * Detects JS redirects to external URLs.
@@ -37,7 +13,8 @@ function extractStringArg(node: unknown): string | null {
  *  - location.replace('https://external...')
  *  - window.location.replace('https://external...')
  *
- * shouldRemove is always false — WARN only.
+ * shouldRemove: true — внешний JS-редирект у владельца НИКОГДА не легит (чужой редирект =
+ * кража трафика), поэтому он автоматически вырезается/нейтрализуется, а не просто варнится.
  */
 export function detectRedirect(ast: Program, ctx: DetectorContext): DetectionResult[] {
   const results: DetectionResult[] = [];
@@ -48,64 +25,66 @@ export function detectRedirect(ast: Program, ctx: DetectorContext): DetectionRes
       const n = node as any;
       const left = n.left;
 
-      if (left?.type !== 'MemberExpression') return;
+      // location = url | window.location = url | location.href = url | location['href'] = url
+      // | top.location.href = url | self.location = url
+      const isBareLocation = isLocationRef(left);
+      const isHrefAssign =
+        left?.type === 'MemberExpression' &&
+        memberPropName(left) === 'href' &&
+        isLocationRef(left.object);
+      if (!isBareLocation && !isHrefAssign) return;
 
-      const obj = left.object;
-      const prop = left.property?.name as string | undefined;
-
-      // window.location = '...' or location.href = '...' or window.location.href = '...'
-      const isLocationAssign =
-        (obj?.name === 'location' && (prop === 'href' || prop === 'replace')) ||
-        (obj?.type === 'MemberExpression' &&
-          obj.object?.name === 'window' &&
-          obj.property?.name === 'location' &&
-          (prop === 'href' || prop === 'replace')) ||
-        (obj?.name === 'window' && prop === 'location');
-
-      if (!isLocationAssign) return;
-
-      const url = extractStringArg(n.right);
-      if (!url || !isExternalUrl(url, mainHost)) return;
+      // DET-1: extractStringish резолвит склейку ('htt'+'ps://evil') и template; опасный
+      // декодер (atob/...) → обфусцированный редирект. Голая переменная — не флагуем.
+      const url = extractStringish(n.right);
+      let description: string | null = null;
+      if (url && isExternalUrl(url, mainHost)) {
+        description = `Редирект на внешний хост: ${url}`;
+      } else {
+        const dec = obfuscatedDecoderIn(n.right);
+        if (dec) description = `Обфусцированный редирект (${dec})`;
+      }
+      if (!description) return;
 
       results.push({
         line: posToLine(source, n.start),
         start: n.start,
         end: n.end,
         threatType: 'redirect',
-        description: `Редирект на внешний хост: ${url}`,
+        description,
         snippet: snippetAt(source, n.start, n.end),
-        shouldRemove: false,
+        shouldRemove: true,
         node,
       });
     },
 
     CallExpression(node: Node) {
       const n = node as any;
-      // location.replace('https://...') or window.location.replace('https://...')
+      // location.assign/replace(url) — в т.ч. window/top/self.location и bracket-формы
       const callee = n.callee;
       if (callee?.type !== 'MemberExpression') return;
-      if (callee.property?.name !== 'replace') return;
+      const method = memberPropName(callee);
+      if (method !== 'assign' && method !== 'replace') return;
+      if (!isLocationRef(callee.object)) return;
 
-      const obj = callee.object;
-      const isLocationReplace =
-        obj?.name === 'location' ||
-        (obj?.type === 'MemberExpression' &&
-          obj.object?.name === 'window' &&
-          obj.property?.name === 'location');
-
-      if (!isLocationReplace) return;
-
-      const url = extractStringArg(n.arguments[0]);
-      if (!url || !isExternalUrl(url, mainHost)) return;
+      const url = extractStringish(n.arguments[0]);
+      let description: string | null = null;
+      if (url && isExternalUrl(url, mainHost)) {
+        description = `Редирект на внешний хост через location.${method}(): ${url}`;
+      } else {
+        const dec = obfuscatedDecoderIn(n.arguments[0]);
+        if (dec) description = `Обфусцированный редирект через location.${method}() (${dec})`;
+      }
+      if (!description) return;
 
       results.push({
         line: posToLine(source, n.start),
         start: n.start,
         end: n.end,
         threatType: 'redirect',
-        description: `Редирект на внешний хост через location.replace(): ${url}`,
+        description,
         snippet: snippetAt(source, n.start, n.end),
-        shouldRemove: false,
+        shouldRemove: true,
         node,
       });
     },

@@ -1,16 +1,21 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import type { ChangelogEntry } from '../../types.js';
+import type { ChangelogEntry, MacroFinding } from '../../types.js';
 import { removeTrackerImports } from './remove-tracker-imports.js';
 import { removeTrackerUrls } from './remove-tracker-urls.js';
+import { scanCssFileMacros } from '../../utils/macro-scan.js';
 
 export async function cleanCssFile(
   filePath: string,
   relPath: string,
   log: ChangelogEntry[],
+  macros?: MacroFinding[],
 ): Promise<number> {
   const original = await readFile(filePath, 'utf8');
   let content = original;
   let removed = 0;
+
+  // CSS-3/MAC-1: макросы во ВНЕШНЕМ .css (внутри url()) — в общую карту макросов.
+  if (macros) macros.push(...scanCssFileMacros(original, relPath));
 
   const imports = removeTrackerImports(content, relPath, log);
   content = imports.content;

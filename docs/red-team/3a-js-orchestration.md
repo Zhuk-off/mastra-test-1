@@ -148,3 +148,41 @@ CJS-3 (непарсимый JS → флаг, не тишина), EVAL-2/SW-1 (re
    `detectDocWriteScript` режет по смещённым позициям.
 2. **CJS-3 + CJS-4** — не глушить AST-анализ молча; regex-правки не должны ломать парс.
 3. **CJS-2** — обфусцированный файл в карантин, а не `unlink` по эвристике.
+
+---
+
+## ✅ Статус фиксов (C5)
+
+- **CJS-1 ✅** — `clean-js` перепарсивает AST после `extractUsefulFunctions` (если что-то вырезано):
+  `let ast`, `ast = parseJs(content)`, а keylogger/redirect/docWrite вынесены во второй `if (ast)` на
+  актуальном дереве. Раньше старые позиции на укоротившемся `content` давали порчу файла /
+  `MagicString: Character is out of bounds` (краш). Тест: `passes/js/__tests__/clean-js.test.ts`.
+- **CJS-2 ✅ (C5б)** — obfuscated/metric JS теперь идут в карантин (`quarantineFile` сохраняет полное
+  содержимое в `_quarantine/`), а затем убираются с деплоя — вместо тихого `unlink`. Восстановимо
+  гранулярно (раньше — только из общего `_backup`). Тест: `__tests__/pipeline-quarantine.test.ts`.
+  **OBF-1/MET-1 🛠**: деструктивное действие исправлено (delete→карантин), но соундность самих
+  детекторов (узкие сигнатуры, подсчёт идентификаторов по AST, «полезность» по AST) — остаётся.
+- **CJS-3, CJS-4** ✅ — см. ниже (C7).
+
+---
+
+## ✅ Статус фиксов (C7 — regex→AST)
+
+- **SW-1/SW-2 ✅** — `remove-service-worker.ts` (regex) удалён; логика → новый AST-детектор
+  [`detect-service-worker.ts`](src/mastra/cleaners/passes/js-advanced/detectors/detect-service-worker.ts)
+  (`detectServiceWorker(ast, ctx)` → `DetectionResult[]`). Ловит литеральную, bracket-,
+  optional-chaining- и алиас-формы `navigator.serviceWorker.register(...)`. Вложенные скобки
+  `register(getURL())` режутся корректно через `neutralizeDetections` (старый `[^)]*` оставлял
+  `);` → битый JS). Тест: `detectors/__tests__/detector-service-worker.test.ts` (9).
+- **EVAL-1/EVAL-2 ✅** — `remove-eval-obfuscation.ts` (regex) удалён; логика → новый AST-детектор
+  [`detect-eval-obfuscation.ts`](src/mastra/cleaners/passes/js-advanced/detectors/detect-eval-obfuscation.ts).
+  Расширено (EVAL-1): `window.atob`, `new Function`, `(0,eval)`, `window['eval']`,
+  `setTimeout/setInterval(<code>)`, `String.fromCharCode`; гейт по обфускации (декодер/base64)
+  исключает FP на легит `eval`/`Function('return this')`/`setTimeout(fn)`. Reference-safe (EVAL-2):
+  `var x = eval(atob(...))` → `var x = void 0` (старый regex оставлял `var x = ;`). Тест:
+  `detectors/__tests__/detector-eval-obfuscation.test.ts` (11).
+- **CJS-3 ✅** — `cleanJsFile` при `!ast` пишет `JS_NOT_ANALYZED` + `detectorWarnings++` (раньше —
+  тихий пропуск всех AST-детекторов). Тест: `passes/js/__tests__/clean-js.test.ts`.
+- **CJS-4 ✅** — SW/eval больше НЕ мутируют сырой текст до парса (стали AST-детекторами). `cleanJsFile`
+  парсит ОДИН раз вверху; кривой SW/eval не может сделать файл непарсимым и каскадом отключить
+  advanced-анализ. Регресс-тест доказывает: `register(getURL()); fetch(evil)` → оба вычищены.

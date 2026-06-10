@@ -1,8 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import MagicString from 'magic-string';
-import type { ChangelogEntry } from '../../types.js';
-import { removeServiceWorker } from './remove-service-worker.js';
-import { removeEvalObfuscation } from './remove-eval-obfuscation.js';
+import type { ChangelogEntry, MacroFinding } from '../../types.js';
+import { scanJsFileMacros } from '../../utils/macro-scan.js';
 import { warnSuspiciousPatterns } from './warn-suspicious-patterns.js';
 import { parseJs } from '../js-advanced/ast/parse.js';
 import { detectMetricFile } from '../js-advanced/detectors/detect-metric-file.js';
@@ -11,6 +9,10 @@ import { detectObfuscation } from '../js-advanced/detectors/detect-obfuscation.j
 import { detectKeylogger } from '../js-advanced/detectors/detect-keylogger.js';
 import { detectRedirect } from '../js-advanced/detectors/detect-redirect.js';
 import { detectDocWriteScript } from '../js-advanced/detectors/detect-document-write-script.js';
+import { detectExfilCalls } from '../js-advanced/detectors/detect-exfil-calls.js';
+import { detectServiceWorker } from '../js-advanced/detectors/detect-service-worker.js';
+import { detectEvalObfuscation } from '../js-advanced/detectors/detect-eval-obfuscation.js';
+import { neutralizeDetections } from '../js-advanced/neutralize-detections.js';
 
 export interface CleanJsResult {
   removed: number;
@@ -26,102 +28,96 @@ export async function cleanJsFile(
   log: ChangelogEntry[],
   mainHost = '',
   runAdvanced = false,
+  macros?: MacroFinding[],
 ): Promise<CleanJsResult> {
   const original = await readFile(filePath, 'utf8');
   let content = original;
   let removed = 0;
   let detectorWarnings = 0;
 
-  const sw = removeServiceWorker(content, relPath, log);
-  content = sw.content;
-  removed += sw.removed;
+  // CJS-5/MAC-1: макросы во ВНЕШНЕМ .js (в строковых литералах) — в общую карту макросов.
+  if (macros) macros.push(...scanJsFileMacros(original, relPath));
 
-  const evalObf = removeEvalObfuscation(content, relPath, log);
-  content = evalObf.content;
-  removed += evalObf.removed;
+  // C7 (CJS-4): service worker и obfuscated-eval — теперь AST-детекторы, а НЕ regex по сырому
+  // тексту. Старый regex (а) ломал JS на вложенных скобках `register(getURL())` (SW-1) и на
+  // `var x = eval(...)` (EVAL-2), и этим (б) делал content непарсимым → `parseJs` падал → весь
+  // advanced-анализ молча отключался (CJS-3/CJS-4). Парсим ОДИН раз и работаем по AST.
+  let ast = parseJs(content, relPath);
+
+  if (ast) {
+    // Базовый AST-слой (в обоих режимах — раньше regex SW/eval работал всегда): нейтрализуем
+    // SW.register() и обфусцированный eval. Reference-safe (statement → удалить, выражение →
+    // void 0) — синтаксис не ломается.
+    const baseCtx = { source: content, relPath, mainHost };
+    const baseDetections = [
+      ...detectServiceWorker(ast, baseCtx),
+      ...detectEvalObfuscation(ast, baseCtx),
+    ];
+    const base = neutralizeDetections(content, ast, baseDetections, log, relPath);
+    if (base.removed > 0) {
+      content = base.code;
+      removed += base.removed;
+      ast = parseJs(content, relPath); // content мутировал → перепарс для дальнейших проходов
+    }
+  } else {
+    // CJS-3: непарсимый JS — не глотаем тишиной, флагаем в отчёт (как 2D-5 для inline-script).
+    log.push({
+      file: relPath,
+      type: 'JS_NOT_ANALYZED',
+      description: 'JS не распарсился — AST-очистка (SW/eval/exfil/redirect/keylogger) пропущена. Проверить вручную.',
+      lineNumber: 1,
+    });
+    detectorWarnings++;
+  }
 
   warnSuspiciousPatterns(content, relPath, log);
 
   if (runAdvanced) {
-    // Stage 7: detect obfuscation — delete entire file if detected (only --advanced)
+    // detectObfuscation — карантин ВСЕГО файла (_0x / packer / fromCharCode), до детальных детекторов.
     if (detectObfuscation(content)) {
       log.push({
         file: relPath,
         type: 'OBFUSCATED_JS',
-        description: 'Файл удалён: обнаружена обфускация (_0x переменные / eval packer / fromCharCode)',
+        description: 'Файл изолирован в карантин: обфускация (_0x переменные / eval packer / fromCharCode)',
         lineNumber: 1,
       });
-      return { removed: 0, partialCleaned: false, isMetricFile: false, isObfuscated: true, detectorWarnings: 0 };
+      return { removed: 0, partialCleaned: false, isMetricFile: false, isObfuscated: true, detectorWarnings };
     }
 
-    const ast = parseJs(content, relPath);
     if (ast) {
       const check = detectMetricFile(ast, content);
       if (check.isMetricFile) {
-        log.push({
-          file: relPath,
-          type: 'METRIC_FILE',
-          description: check.reason,
-          lineNumber: 1,
-        });
-        return { removed: 0, partialCleaned: false, isMetricFile: true, isObfuscated: false, detectorWarnings: 0 };
+        log.push({ file: relPath, type: 'METRIC_FILE', description: check.reason, lineNumber: 1 });
+        return { removed: 0, partialCleaned: false, isMetricFile: true, isObfuscated: false, detectorWarnings };
       }
 
-      // Вырезаем функции, которые только делают exfil-вызовы (Stage 6)
+      // Вырезаем функции, которые только делают exfil-вызовы (Stage 6).
       const ctx = { source: content, relPath, mainHost };
       const extracted = extractUsefulFunctions(content, ast, ctx, log);
       if (extracted.removed > 0) {
         content = extracted.code;
         removed += extracted.removed;
+        // CJS-1: content мутировал → позиции старого AST невалидны. Перепарсим, иначе
+        // detectDocWriteScript режет MagicString по смещённым позициям (порча / out of bounds).
+        ast = parseJs(content, relPath);
       }
+    }
 
-      // Stage 7: detect keylogger — WARN only
-      const keyloggerResults = detectKeylogger(ast, content);
-      for (const r of keyloggerResults) {
-        log.push({
-          file: relPath,
-          type: 'KEYLOGGER_WARN',
-          description: r.description,
-          codeSnippet: r.snippet,
-          lineNumber: r.line,
-        });
-        detectorWarnings++;
-      }
-
-      // Stage 7: detect redirect — WARN only
-      const redirectResults = detectRedirect(ast, { source: content, relPath, mainHost });
-      for (const r of redirectResults) {
-        log.push({
-          file: relPath,
-          type: 'REDIRECT_WARN',
-          description: r.description,
-          codeSnippet: r.snippet,
-          lineNumber: r.line,
-        });
-        detectorWarnings++;
-      }
-
-      // Stage 7: detect document.write(<script src="...">) — remove
-      const docWriteResults = detectDocWriteScript(ast, { source: content, relPath, mainHost });
-      const toRemove = docWriteResults.filter(r => r.shouldRemove);
-      if (toRemove.length > 0) {
-        const ms = new MagicString(content);
-        // Sort descending to avoid position shifts
-        const sorted = [...toRemove].sort((a, b) => b.start - a.start);
-        for (const r of sorted) {
-          let end = r.end;
-          while (end < content.length && /[;\s]/.test(content[end]!)) end++;
-          ms.remove(r.start, end);
-          log.push({
-            file: relPath,
-            type: r.threatType.toUpperCase(),
-            description: r.description,
-            codeSnippet: r.snippet,
-            lineNumber: r.line,
-          });
-          removed++;
-        }
-        content = ms.toString();
+    // exfil/redirect/keylogger/document.write — на АКТУАЛЬНОМ ast (после extractUsefulFunctions).
+    // Редирект на чужой хост и keylogger у владельца не легит → нейтрализуем (не WARN).
+    // Удаление reference-safe (DEC-1): statement убирается целиком, вызов в выражении → void 0.
+    if (ast) {
+      const detCtx = { source: content, relPath, mainHost };
+      const detections = [
+        ...detectExfilCalls(ast, detCtx),
+        ...detectRedirect(ast, detCtx),
+        ...detectKeylogger(ast, content),
+        ...detectDocWriteScript(ast, detCtx),
+      ];
+      const neutralized = neutralizeDetections(content, ast, detections, log, relPath);
+      if (neutralized.removed > 0) {
+        content = neutralized.code;
+        removed += neutralized.removed;
       }
     }
   }

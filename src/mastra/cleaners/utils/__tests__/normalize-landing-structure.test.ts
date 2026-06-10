@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, mkdir, readFile, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { rm } from 'node:fs/promises';
 import { normalizeLandingStructure } from '../normalize-landing-structure.js';
 
@@ -899,5 +899,207 @@ describe('BUG #16 — pathsRewritten counts resources, not occurrences', () => {
 
     const stats = await normalizeLandingStructure(tmp);
     expect(stats.pathsRewritten).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NORM-1 — path traversal containment (Critical)
+// ---------------------------------------------------------------------------
+
+describe('NORM-1 — путь не должен выходить за siteDir', () => {
+  it('НЕ удаляет/не тащит в сайт файл вне siteDir по ссылке ../ из HTML', async () => {
+    const victimDir = await mkdtemp(join(tmpdir(), 'nls-victim-'));
+    const secret = join(victimDir, 'secret.png');
+    await writeFile(secret, 'TOP SECRET', 'utf8');
+    try {
+      const rel = relative(tmp, secret).replace(/\\/g, '/'); // ../nls-victim-xxxx/secret.png
+      await setup(tmp, {
+        'index.html': `<!DOCTYPE html><html><head><title>x</title></head><body><img src="${rel}"></body></html>`,
+      });
+
+      await normalizeLandingStructure(tmp);
+
+      // Файл-жертва на месте (не перемещён/не удалён) и НЕ затащен в собранный сайт.
+      expect(await exists(secret)).toBe(true);
+      expect(await read(secret)).toBe('TOP SECRET');
+      expect(await exists(join(tmp, 'images', 'secret.png'))).toBe(false);
+    } finally {
+      await rm(victimDir, { recursive: true, force: true });
+    }
+  });
+
+  it('НЕ тащит в сайт файл вне siteDir по ссылке ../ из CSS url()', async () => {
+    const victimDir = await mkdtemp(join(tmpdir(), 'nls-victim-'));
+    const secret = join(victimDir, 'leak.png');
+    await writeFile(secret, 'BINARY', 'utf8');
+    try {
+      // CSS-ссылки резолвятся от ИСХОДНОГО расположения css-файла (корень tmp).
+      const rel = relative(tmp, secret).replace(/\\/g, '/');
+      await setup(tmp, {
+        'index.html': `<!DOCTYPE html><html><head><title>x</title><link rel="stylesheet" href="main.css"></head><body><p>hi</p></body></html>`,
+        'main.css': `body{background:url("${rel}")}`,
+      });
+
+      await normalizeLandingStructure(tmp);
+
+      expect(await exists(secret)).toBe(true);
+      expect(await read(secret)).toBe('BINARY');
+    } finally {
+      await rm(victimDir, { recursive: true, force: true });
+    }
+  });
+
+  it('РОБАСТНОСТЬ: легитимный ../ ВНУТРИ siteDir по-прежнему переезжает', async () => {
+    await setup(tmp, {
+      'pages/index.html': `<!DOCTYPE html><html><head><title>x</title></head><body><img src="../shared/logo.png"></body></html>`,
+      'shared/logo.png': '',
+    });
+
+    const stats = await normalizeLandingStructure(tmp);
+
+    expect(stats.filesMoved).toBeGreaterThanOrEqual(1);
+    expect(await exists(join(tmp, 'images', 'logo.png'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NORM-3 — полный сбор ссылок (lazy-load / poster / <use> / @import)
+// ---------------------------------------------------------------------------
+
+describe('NORM-3 — расширенный сбор ссылок', () => {
+  it('lazy-load data-src собирается, переезжает и переписывается (главный файл из subdir)', async () => {
+    await setup(tmp, {
+      'pages/index.html': `<!DOCTYPE html><html><body>
+<img data-src="hero.jpg" src="ph.gif">
+</body></html>`,
+      'pages/hero.jpg': 'JPG',
+      'pages/ph.gif': 'GIF',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'images', 'hero.jpg'))).toBe(true);
+    expect(html).toContain('images/hero.jpg'); // data-src переписан
+    expect(html).not.toMatch(/data-src="hero\.jpg"/); // старый путь не остался
+    expect(await exists(join(tmp, 'pages', 'hero.jpg'))).toBe(false); // файл переехал
+  });
+
+  it('<video poster> собирается и переписывается', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><body>
+<video poster="thumb.jpg" src="clip.mp4"></video>
+</body></html>`,
+      'thumb.jpg': 'JPG',
+      'clip.mp4': 'MP4',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'images', 'thumb.jpg'))).toBe(true);
+    expect(html).toContain('poster="images/thumb.jpg"');
+  });
+
+  it('<use href> (SVG-спрайт) переезжает, фрагмент #id сохраняется', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><body>
+<svg><use href="sprite.svg#ico"></use></svg>
+</body></html>`,
+      'sprite.svg': '<svg></svg>',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'images', 'sprite.svg'))).toBe(true);
+    expect(html).toContain('images/sprite.svg#ico');
+  });
+
+  it('data-srcset (несколько кандидатов) переписывается', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><body>
+<img data-srcset="a.jpg 1x, b.jpg 2x">
+</body></html>`,
+      'a.jpg': 'A',
+      'b.jpg': 'B',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'images', 'a.jpg'))).toBe(true);
+    expect(await exists(join(tmp, 'images', 'b.jpg'))).toBe(true);
+    expect(html).toContain('images/a.jpg');
+    expect(html).toContain('images/b.jpg');
+  });
+
+  it('bare @import "x.css" (без url()) в <style> собирается и переписывается', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><head>
+<style>@import "theme.css";</style>
+</head><body>x</body></html>`,
+      'theme.css': 'body{}',
+    });
+
+    await normalizeLandingStructure(tmp);
+
+    const html = await read(join(tmp, 'index.html'));
+    expect(await exists(join(tmp, 'css', 'theme.css'))).toBe(true);
+    expect(html).toContain('css/theme.css');
+  });
+
+  it('РОБАСТНОСТЬ: data-src с не-файловым значением безопасно игнорируется', async () => {
+    await setup(tmp, {
+      'index.html': `<!DOCTYPE html><html><body>
+<div data-src='{"cfg":1}'></div>
+<img src="real.png">
+</body></html>`,
+      'real.png': 'PNG',
+    });
+
+    // не должно бросить; реальный ресурс при этом переезжает
+    await normalizeLandingStructure(tmp);
+    expect(await exists(join(tmp, 'images', 'real.png'))).toBe(true);
+  });
+});
+
+describe('NORM-6 — выбор главного файла: расширения + детерминизм', () => {
+  it('.xhtml распознаётся как главный → index.html', async () => {
+    await setup(tmp, {
+      'page.xhtml': '<!DOCTYPE html><html><head><title>Hi</title></head><body><h1>x</h1></body></html>',
+      'style.css': 'body{}',
+    });
+    const stats = await normalizeLandingStructure(tmp);
+    expect(await exists(join(tmp, 'index.html'))).toBe(true);
+    expect(stats.mainFileFound).toBe('page.xhtml');
+  });
+
+  it('.phtml распознаётся как главный → index.html', async () => {
+    await setup(tmp, {
+      'landing.phtml': '<!DOCTYPE html><html><head><title>L</title></head><body><h1>x</h1></body></html>',
+    });
+    const stats = await normalizeLandingStructure(tmp);
+    expect(await exists(join(tmp, 'index.html'))).toBe(true);
+    expect(stats.mainFileFound).toBe('landing.phtml');
+  });
+
+  it('тай-брейк детерминирован: при равных очках — путь по алфавиту', async () => {
+    const html = '<!DOCTYPE html><html><head><title>T</title></head><body><h1>x</h1></body></html>';
+    await setup(tmp, { 'bbb.html': html, 'aaa.html': html });
+    const stats = await normalizeLandingStructure(tmp);
+    expect(stats.mainFileFound).toBe('aaa.html'); // не bbb.html — детерминированно
+    expect(await exists(join(tmp, 'index.html'))).toBe(true);
+    expect(await exists(join(tmp, 'bbb.html'))).toBe(true); // второй кандидат остаётся на месте
+  });
+
+  it('НЕ-регресс: index.html выигрывает у прочих .html по очкам', async () => {
+    const other = '<!DOCTYPE html><html><head><title>Other</title></head><body><h1>y</h1><form></form></body></html>';
+    await setup(tmp, {
+      'aaa.html': other, // алфавитно раньше, но не index
+      'index.html': '<!DOCTYPE html><html><head><title>Main</title></head><body>main</body></html>',
+    });
+    const stats = await normalizeLandingStructure(tmp);
+    expect(stats.mainFileFound).toBe('index.html');
   });
 });

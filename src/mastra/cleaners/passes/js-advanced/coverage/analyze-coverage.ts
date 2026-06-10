@@ -57,7 +57,21 @@ export function analyzeDeadFiles(
     const source = fs.readFileSync(absPath, 'utf8');
     const ast = parseJs(source, cov.relPath);
 
-    const hasHandlers = ast ? hasEventHandlers(ast) : false;
+    // ANA-1: непарсимый файл НЕ считаем мёртвым автоматически — мы просто не смогли
+    // проверить наличие обработчиков (они могли там быть). Удалять непроанализированное
+    // нельзя (FP с потерей рабочего файла). Оставляем (isDead=false).
+    if (!ast) {
+      results.push({
+        relPath: cov.relPath,
+        coveragePercent: cov.percent,
+        hasEventHandlers: false,
+        isDead: false,
+        reason: 'Не распарсился — не анализируем, не считаем мёртвым',
+      });
+      continue;
+    }
+
+    const hasHandlers = hasEventHandlers(ast);
 
     if (hasHandlers) {
       results.push({

@@ -48,6 +48,8 @@ export interface CleanStats {
   sourceMapsDeleted: number;
   sourceMapRefsStripped: number;
   offerLinksReplaced: number;
+  /** Навигационные href с опасной схемой (javascript:/data:/…) на <a>/<area>, у которых снят href (2D-6). */
+  dangerousHrefsNeutralized: number;
   bytesBefore: number;
   bytesAfter: number;
   normalize?: NormalizeStats;
@@ -75,6 +77,9 @@ export interface CleanStats {
   cspInjected: number;
   /** true если найдены PHP-бэкдоры (require manual inspection) */
   phpBackdoorWarning: boolean;
+  /** Файлы, из которых вырезаны серверные теги (<?php ?> / <% %>) и затем очищены.
+   *  Свой серверный код добавляется на этапе адаптации. Попадает в отчёт. */
+  serverTagsFilesStripped: number;
 }
 
 export interface CdnReplacement {
@@ -142,6 +147,7 @@ export type HtmlStatsKey =
   | 'localLibsReplaced'
   | 'eventAttrsRemoved'
   | 'offerLinksReplaced'
+  | 'dangerousHrefsNeutralized'
   | 'inlineExfilRemoved'
   | 'cspInjected';
 

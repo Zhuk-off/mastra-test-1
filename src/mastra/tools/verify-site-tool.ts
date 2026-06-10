@@ -26,6 +26,8 @@ export const verifySiteTool = createTool({
     consoleErrorCount: z.number(),
     failedRequestCount: z.number(),
     screenshotPath: z.string(),
+    /** Найден квиз/интерактив — нужна РУЧНАЯ перепроверка прокликивания. */
+    hasQuiz: z.boolean(),
   }),
   execute: async ({ siteDir, pagePath }) => {
     const dir = resolve(siteDir);
@@ -39,6 +41,7 @@ export const verifySiteTool = createTool({
     );
     if (res.consoleErrors.length) parts.push(`${res.consoleErrors.length} ошибок консоли`);
     if (res.failedRequests.length) parts.push(`${res.failedRequests.length} неуспешных запросов`);
+    if (res.hasQuiz) parts.push('⚠️ есть квиз/интерактив — перепроверьте прокликивание вручную');
 
     return {
       ok: res.ok,
@@ -51,6 +54,7 @@ export const verifySiteTool = createTool({
       consoleErrorCount: res.consoleErrors.length,
       failedRequestCount: res.failedRequests.length,
       screenshotPath: res.screenshotPath,
+      hasQuiz: res.hasQuiz,
     };
   },
 });

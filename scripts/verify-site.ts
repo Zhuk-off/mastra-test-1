@@ -13,6 +13,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { join, resolve, extname } from 'node:path';
 import { AddressInfo } from 'node:net';
+import { autoInteract } from '../src/mastra/cleaners/verify/verify-runtime.js';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -121,6 +122,9 @@ async function main(): Promise<void> {
   await page.screenshot({ path: screenshotPath, fullPage: true });
   console.log(`[verify] Скриншот: ${screenshotPath}`);
 
+  // C8/VR-1: прокликиваем интерактив — ловим phone-home/редирект по клику (внешние запросы ниже).
+  const { hasQuiz, clicked } = await autoInteract(page);
+
   await context.close();
   await browser.close();
   await close();
@@ -132,6 +136,10 @@ async function main(): Promise<void> {
   failedRequests.slice(0, 20).forEach((e) => console.log(`  - ${e}`));
   console.log(`[verify] External requests: ${externalRequests.length}`);
   externalRequests.slice(0, 30).forEach((e) => console.log(`  - ${e}`));
+  console.log(`[verify] Кликов по интерактиву: ${clicked}`);
+  if (hasQuiz) {
+    console.log('[verify] ⚠️  Лендинг содержит квиз/интерактив — ПЕРЕПРОВЕРЬТЕ прокликивание ВРУЧНУЮ.');
+  }
 }
 
 main().catch((err) => {
