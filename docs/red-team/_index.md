@@ -149,8 +149,8 @@
 | SW-1 | detect-service-worker | 🟨 | Robustness | Вложенные скобки в register() корёжат JS | ✅ |
 | SW-2 | detect-service-worker | 🟩 | Soundness | Только литеральный `navigator.serviceWorker.register` | ✅ |
 | WARN-1 | js-warning-patterns | 🟩 | Robustness | `while(re.exec)` зависнет, если паттерн без `/g` (латентно) | 🆕 |
-| PARSE-1 | ast/parse | 🟨 | Bypass | acorn не парсит Annex B `<!--` → AST-анализ пропущен | 🆕 |
-| PARSE-2 | ast/parse | 🟨 | Robustness | Ошибка парса только в `console.warn`, не в отчёте | 🆕 |
+| PARSE-1 | ast/parse | 🟨 | Bypass | acorn не парсит Annex B `<!--` → AST-анализ пропущен | ✅ |
+| PARSE-2 | ast/parse | 🟨 | Robustness | Ошибка парса только в `console.warn`, не в отчёте | 🛠 |
 | PARSE-3 | ast/parse | 🟩 | Robustness | module-first; нет лимита размера/времени парса | 🆕 |
 | RIE-1 | remove-inline-exfil | 🟨 | Robustness | Удаление по узлу: `var x = fetch()` → `var x = ;` (зависит от 3c) | ✅ |
 | EUF-1 | extract-useful-functions | 🟧 | Robustness | Удаляется объявление функции без мест вызова → ReferenceError | ✅ |

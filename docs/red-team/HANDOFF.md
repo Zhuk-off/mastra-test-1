@@ -22,7 +22,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **442 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **445 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (AST-advanced включён по умолчанию; `--no-advanced` чтобы выключить).
 - Проверка: `npm run verify -- <dir>` (интерактивная — прокликивает).
@@ -109,9 +109,10 @@ PIPE-3 (per-file try/catch — один кривой файл не валит п
 - ✅ **SW-1/SW-2** → `detect-service-worker.ts`, **EVAL-1/EVAL-2** → `detect-eval-obfuscation.ts` (regex
   файлы удалены; гонятся через `neutralizeDetections`). ✅ **CJS-3/CJS-4** — `clean-js` парсит один раз,
   SW/eval не мутируют сырой текст до парса; непарсимое → `JS_NOT_ANALYZED`, не тишина.
-- 🆕 **PARSE-1/PARSE-2** (`ast/parse`, СЛЕДУЮЩЕЕ) — PARSE-1 эмпирически уже закрыт fallback'ом
-  module→script (acorn берёт Annex B `<!--` в script-режиме); нужен регресс-тест + закрыть. PARSE-2
-  (непарсимое → отчёт, не только `console.warn`) частично решён CJS-3 на уровне `clean-js`.
+- ✅ **PARSE-1** — закрыт fallback'ом module→script (acorn берёт Annex B `<!--` в script-режиме);
+  закреплён регресс-тестами в `ast/__tests__/parse.test.ts`. 🛠 **PARSE-2** — основной путь (`.js`)
+  репортит непарсимое через CJS-3 (`JS_NOT_ANALYZED`); `parseJs` остаётся чистым, прочие вызывающие
+  (inline = 2D-5) — позже. 🟩 **PARSE-3** (module-first двойной парс / нет лимита размера) — оставлен.
 
 **Детекторы/PHP (🟨):**
 - **OBF-1/MET-1** (🛠) — точнее по AST (идентификаторы/«полезность»). Срочность низкая: удаления обратимы (карантин).
@@ -138,8 +139,10 @@ by-design — решение владельца №7).
 ## Как начать новую сессию
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры). При сомнении — `git log --oneline`.
-2. **Весь Critical + High + C6 + SVG + offer + 2D-2 закрыты.** Возьми верхнюю незакрытую из «Что осталось» —
-   рекомендую начать с кластера **C7** (regex→AST в JS-проходах: SW/EVAL/PARSE/CJS).
+2. **Весь Critical + High + C6 + SVG + offer + 2D-2 + C7 закрыты.** Возьми верхнюю незакрытую из «Что
+   осталось». Кандидаты на следующий заход: соундность детекторов **OBF-1/MET-1** (🛠, по AST), **PHP-1**
+   (обфусц. бэкдоры / `.phtml`/`.inc` / WARN→действие) или **2D-5** (непарсимый inline-`<script>` → флаг,
+   как PARSE-2). Кластер **Normalize/HTML** (NORM-4/5/6, 2B-1/2B-2) — робастность.
 3. TDD → фикс → зелёные тесты + чистый `tsc` → обнови `_index.md` + per-file док + счётчик тестов здесь →
    коммит на `redteam-fixes`.
 4. После пачки фиксов — `npm run clean -- <copy>` и `npm run verify -- <copy>` на копии реального лендинга

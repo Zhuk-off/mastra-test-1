@@ -132,4 +132,13 @@ exfil во внешнем `.js`), RIE-1 (exfil в `var x = fetch(...)` → не 
   по Identifier-узлам (исключая саму декларацию). Тесты: `extract-useful-functions.test.ts` (+2).
 - **RIE-1 ✅** — закрыт вместе с DEC-1 (см. [3c](3c-detectors.md)): `remove-inline-exfil` для вызова
   внутри выражения подставляет `void 0`, не оставляя `var x = ;`.
-- **PARSE-1 / PARSE-2 / EUF-2** — не трогали (отдельные находки).
+- **PARSE-1 ✅** — премиса находки («оба режима падают → null») неверна для текущего `parseJs`:
+  acorn берёт Annex B `<!--`/`-->` в **script**-режиме, а `parseJs` пробует module→**script**, поэтому
+  legacy `<script><!-- … //--></script>` парсится через script-fallback → файл анализируется, не «тихо
+  null». Закреплено регресс-тестами (`ast/__tests__/parse.test.ts`, +3): классический `//-->`, голый
+  `-->`, inline `<!--`.
+- **PARSE-2 🛠** — для основного пути (внешние `.js`) факт «не распарсилось» теперь идёт в отчёт через
+  [CJS-3](3a-js-orchestration.md) (`JS_NOT_ANALYZED` + `detectorWarnings++`), а не только в `console.warn`.
+  Сам `parseJs` остаётся чистым (возвращает `null`) — для прочих вызывающих (inline-`<script>` —
+  отдельная находка [2D-5](2d-defensive.md)) репортинг ещё не разведён.
+- **EUF-2** — не трогали (отдельная находка).

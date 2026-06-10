@@ -20,6 +20,25 @@ describe('parseJs', () => {
   });
 });
 
+describe('PARSE-1 — Annex B HTML-комментарии не выключают AST-анализ', () => {
+  // acorn НЕ берёт `<!--`/`-->` в module-режиме, но БЕРЁТ в script-режиме. parseJs пробует
+  // module→script, поэтому legacy `<script><!-- … //--></script>` всё равно парсится (script
+  // fallback) → файл анализируется, а не «тихо null». Регресс-замок против удаления fallback.
+  it('классический <!-- … //--> парсится', () => {
+    const ast = parseJs('<!--\nvar x = 1; document.write(x);\n//-->', 'legacy.js');
+    expect(ast).not.toBeNull();
+    expect(ast?.type).toBe('Program');
+  });
+
+  it('голый -->-закрыватель в начале строки парсится', () => {
+    expect(parseJs('<!--\nvar x = 1;\n-->', 'legacy.js')).not.toBeNull();
+  });
+
+  it('inline <!-- в середине (legacy) парсится', () => {
+    expect(parseJs('var a = 1; <!-- legacy\nvar b = 2;', 'legacy.js')).not.toBeNull();
+  });
+});
+
 describe('posToLine', () => {
   it('правильно считает строку', () => {
     expect(posToLine('a\nb\nc', 4)).toBe(3); // позиция 'c'
