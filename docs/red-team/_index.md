@@ -140,14 +140,14 @@
 | 2D-6 | strip-dangerous-hrefs (new pass) | 🟧 | Bypass | `<a href="javascript:/data:">` не проходит `classifyResource` → выживает (остаток C1: классификатор готов, проход не подключён) | ✅ |
 | CJS-1 | clean-js | 🟧 | Correctness | Устаревший AST: docWrite режет по смещённым позициям после extract | ✅ |
 | CJS-2 | clean-js | 🟨 | Robustness | `detectObfuscation` удаляет весь файл (без карантина) — FP на минифик. либе | ✅ |
-| CJS-3 | clean-js | 🟨 | Robustness | Парс не удался → все AST-детекторы молча пропущены | 🆕 |
-| CJS-4 | clean-js | 🟨 | Robustness | regex SW/eval ломает JS → каскадом глушит AST | 🆕 |
+| CJS-3 | clean-js | 🟨 | Robustness | Парс не удался → все AST-детекторы молча пропущены | ✅ |
+| CJS-4 | clean-js | 🟨 | Robustness | regex SW/eval ломает JS → каскадом глушит AST | ✅ |
 | CJS-5 | clean-js | 🟨 | Soundness | Макросы во внешних `.js` не сканируются (T-8) | ✅ |
 | CJS-6 | clean-js | 🟩 | Soundness | warn-слой не гейтит выгрузку | 🆕 |
-| EVAL-1 | remove-eval-obfuscation | 🟨 | Soundness | Узкая регулярка: `window.atob`/`new Function`/`(0,eval)` мимо | 🆕 |
-| EVAL-2 | remove-eval-obfuscation | 🟨 | Robustness | Удаление eval в выражении ломает JS (`var x = eval…`) | 🆕 |
-| SW-1 | remove-service-worker | 🟨 | Robustness | Вложенные скобки в register() корёжат JS | 🆕 |
-| SW-2 | remove-service-worker | 🟩 | Soundness | Только литеральный `navigator.serviceWorker.register` | 🆕 |
+| EVAL-1 | detect-eval-obfuscation | 🟨 | Soundness | Узкая регулярка: `window.atob`/`new Function`/`(0,eval)` мимо | ✅ |
+| EVAL-2 | detect-eval-obfuscation | 🟨 | Robustness | Удаление eval в выражении ломает JS (`var x = eval…`) | ✅ |
+| SW-1 | detect-service-worker | 🟨 | Robustness | Вложенные скобки в register() корёжат JS | ✅ |
+| SW-2 | detect-service-worker | 🟩 | Soundness | Только литеральный `navigator.serviceWorker.register` | ✅ |
 | WARN-1 | js-warning-patterns | 🟩 | Robustness | `while(re.exec)` зависнет, если паттерн без `/g` (латентно) | 🆕 |
 | PARSE-1 | ast/parse | 🟨 | Bypass | acorn не парсит Annex B `<!--` → AST-анализ пропущен | 🆕 |
 | PARSE-2 | ast/parse | 🟨 | Robustness | Ошибка парса только в `console.warn`, не в отчёте | 🆕 |

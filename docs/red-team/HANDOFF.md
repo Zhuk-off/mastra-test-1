@@ -22,7 +22,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **418 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **442 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (AST-advanced включён по умолчанию; `--no-advanced` чтобы выключить).
 - Проверка: `npm run verify -- <dir>` (интерактивная — прокликивает).
@@ -105,11 +105,13 @@ PIPE-3 (per-file try/catch — один кривой файл не валит п
 > **2D-2 ✅ закрыта** (обфусцированный/протокол-относительный exfil в значении `on*` теперь идёт через
 > AST `detectExfilCalls`+`detectRedirect`). Следующее рекомендованное — кластер **C7** (regex→AST в JS).
 
-**C7 — «regex вместо парсера» в JS-проходах (🟨, СЛЕДУЮЩЕЕ):**
-- **SW-1/SW-2** (`remove-service-worker`), **EVAL-1/EVAL-2** (`remove-eval-obfuscation`) — regex ломает
-  синтаксис/пропускает формы; перевести на AST.
-- **PARSE-1/PARSE-2** (`ast/parse`) — acorn не берёт Annex B `<!--`; непарсимое → флаг в отчёт, не тихий null.
-- **CJS-3/CJS-4** (`clean-js`) — парс-фейл молча глушит все AST-детекторы; regex SW/eval не должен ломать парс.
+**C7 — «regex вместо парсера» в JS-проходах (🟨):**
+- ✅ **SW-1/SW-2** → `detect-service-worker.ts`, **EVAL-1/EVAL-2** → `detect-eval-obfuscation.ts` (regex
+  файлы удалены; гонятся через `neutralizeDetections`). ✅ **CJS-3/CJS-4** — `clean-js` парсит один раз,
+  SW/eval не мутируют сырой текст до парса; непарсимое → `JS_NOT_ANALYZED`, не тишина.
+- 🆕 **PARSE-1/PARSE-2** (`ast/parse`, СЛЕДУЮЩЕЕ) — PARSE-1 эмпирически уже закрыт fallback'ом
+  module→script (acorn берёт Annex B `<!--` в script-режиме); нужен регресс-тест + закрыть. PARSE-2
+  (непарсимое → отчёт, не только `console.warn`) частично решён CJS-3 на уровне `clean-js`.
 
 **Детекторы/PHP (🟨):**
 - **OBF-1/MET-1** (🛠) — точнее по AST (идентификаторы/«полезность»). Срочность низкая: удаления обратимы (карантин).

