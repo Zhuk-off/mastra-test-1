@@ -95,8 +95,8 @@ describe('DOM passes — интеграция (cheerio)', () => {
     expect(out).not.toContain('offer.network/buy');
   });
 
-  it('информационная ссылка /privacy сохранена', () => {
-    expect(out).toContain('/privacy');
+  it('относительная /privacy → {offer} (агрессивная политика: вся навигация на оффер)', () => {
+    expect(out).not.toContain('href="/privacy"');
   });
 
   it('простой обработчик onclick="next()" сохранён', () => {

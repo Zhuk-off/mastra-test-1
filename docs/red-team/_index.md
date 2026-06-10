@@ -129,9 +129,9 @@
 | MAC-3 | detect-macros | 🟨 | Soundness | Template-скрипты/непарсимый inline-JS пропускаются | 🆕 |
 | MAC-4 | detect-macros | 🟩 | Soundness | В CSS макрос ищется только в `url()` (не `content:`) | 🆕 |
 | MAC-5 | detect-macros | 🟩 | Soundness | Авто-`{offer}` только для `<a>`/`<area>` | 🆕 |
-| OFFER-1 | offer-detector | 🟨 | Robustness | Любая внешняя не-trusted ссылка → `{offer}` (соцсети/правовые ломаются) | 🆕 |
-| OFFER-2 | offer-detector | 🟨 | Soundness | Нераспознанный same-host оффер сохраняет ЧУЖОЙ URL | 🆕 |
-| OFFER-3 | offer-detector | 🟩 | Soundness | Декод только `&amp;`; относительные офферы не ловятся | 🆕 |
+| OFFER-1 | offer-detector | 🟨 | Robustness | Любая внешняя не-trusted ссылка → `{offer}` (соцсети/правовые ломаются) | 🚫 |
+| OFFER-2 | offer-detector | 🟨 | Soundness | Нераспознанный same-host оффер сохраняет ЧУЖОЙ URL | ✅ |
+| OFFER-3 | offer-detector | 🟩 | Soundness | Декод только `&amp;`; относительные офферы не ловятся | ✅ |
 | 2D-1 | allowlist.ts (сквозь) | 🟧 | Bypass | `data:`/`javascript:`/`blob:` в src/href не ловит НИКТО (T-3) | ✅ |
 | 2D-2 | strip-event-attrs | 🟨 | Bypass | `on*` снимается только при литеральном url/keyword; обфускация мимо | 🆕 |
 | 2D-3 | event-attrs.ts | 🟨 | Bypass | Реестр `on*` неполон — нет touch/pointer/wheel (mobile) | 🆕 |
