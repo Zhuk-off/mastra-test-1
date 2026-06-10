@@ -27,7 +27,7 @@
   media → quarantine; `javascript:` в href → remove. Это единственный фикс, закрывающий весь класс.
 - **Уверенность:** подтверждено сквозным чтением всех HTML-проходов (T-3 окончательно резолвлен).
 
-### [2D-2] 🔴 Bypass · 🟨 Medium-High · `on*`-обработчики снимаются только при ЛИТЕРАЛЬНОМ url/keyword
+### [2D-2] 🔴 Bypass · 🟨 Medium-High · `on*`-обработчики снимаются только при ЛИТЕРАЛЬНОМ url/keyword (✅ закрыта)
 
 - **Сейчас:** `stripEventAttrs` снимает `on*` только если значение содержит `/https?:\/\//i` **или**
   трекер-ключевое слово ([:21](src/mastra/cleaners/passes/html/strip-event-attrs.ts:21)).
@@ -120,6 +120,12 @@
   clipboard/history/media, а лендинги арбитража мобильные. Гейт по значению (внешний URL/трекер-ключевое
   слово) сохранён, поэтому простые quiz-обработчики (`ontouchstart="nextStep()"`) остаются. Тест:
   `strip-event-attrs.test.ts` (8).
-- **2D-2** — НЕ трогали: обфусцированный/протокол-относительный exfil в значении `on*` (`location='//evil'`,
-  `atob(...)`) блок-лист по значению пока не ловит (в идеале — гнать значение `on*` через AST inline-exfil). 🆕
+- **2D-2 ✅** — обфусцированный/протокол-относительный exfil в значении `on*` теперь ловится.
+  `strip-event-attrs` оборачивает значение обработчика в `function __h(event){…}` (чтобы `return`/`this`/
+  `event` были валидны), парсит через `parseJs` и гонит AST через те же `detectExfilCalls` + `detectRedirect`,
+  что и inline-`<script>` (DET-1/DET-2 умеют обфускацию и `//host`). Снимается: `location='//evil'`,
+  `location=atob('aHR0…')`, `fetch(atob(...))`, `new Image().src='\x2f\x2fevil'`, exfil внутри `return …`.
+  Гейт по литералу (внешний URL/трекер-слово) сохранён как первая линия; AST-проверка аддитивна. Same-host
+  навигация и обычные обработчики (`onsubmit="return validate()"`) остаются (`isExternalUrl` ≠ свой хост;
+  непарсимое → не трогаем, ср. ANA-1). Тесты: `strip-event-attrs.test.ts` (+8 = 16).
 - **2D-5** — НЕ трогали (непарсимый inline-script — логировать, не молча пропускать); 🆕.

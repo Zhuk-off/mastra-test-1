@@ -22,7 +22,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **410 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **418 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (AST-advanced включён по умолчанию; `--no-advanced` чтобы выключить).
 - Проверка: `npm run verify -- <dir>` (интерактивная — прокликивает).
@@ -91,7 +91,8 @@ UCDN-1+UCDN-2 (SRI от CDN-файла; 404→фолбэк), COV-1+ANA-1 (мёр
 
 **Offer/robustness:** OFFER-1 (🚫 by-design) + OFFER-2 + OFFER-3 (агрессивная политика, см. решение №7),
 PIPE-3 (per-file try/catch — один кривой файл не валит прогон), 2D-3 (снятие ЛЮБОГО `on*` по префиксу —
-покрыты мобильные touch/pointer/wheel/clipboard/history/media).
+покрыты мобильные touch/pointer/wheel/clipboard/history/media), 2D-2 (значение `on*` через AST
+`detectExfilCalls`+`detectRedirect`: обфусцированный/протокол-относительный/`return …` exfil ловится).
 
 **Ключевые новые модули/функции:** `passes/html/strip-dangerous-hrefs.ts`, `passes/html/clean-inline-css.ts`,
 `utils/macro-scan.ts`, `utils/html-dom.ts::parseFragment/serializeFragment`,
@@ -101,13 +102,10 @@ PIPE-3 (per-file try/catch — один кривой файл не валит п
 
 ## Что осталось — приоритетный порядок для новой сессии
 
-**Логичное следующее (полезное, 🟨):**
-- **2D-2** — обфусцированный/протокол-относительный exfil в значении `on*` (`onclick="location='//evil'"`,
-  `ontouchstart="fetch(atob(...))"`). Сейчас `strip-event-attrs` снимает `on*` только при литеральном
-  `https?://`/трекер-слове. Прямое продолжение 2D-3: гнать значение `on*` через тот же AST inline-exfil
-  анализ (детекторы DET-1/DET-2 уже умеют обфускацию). Усиливает защиту мобильных обработчиков.
+> **2D-2 ✅ закрыта** (обфусцированный/протокол-относительный exfil в значении `on*` теперь идёт через
+> AST `detectExfilCalls`+`detectRedirect`). Следующее рекомендованное — кластер **C7** (regex→AST в JS).
 
-**C7 — «regex вместо парсера» в JS-проходах (🟨):**
+**C7 — «regex вместо парсера» в JS-проходах (🟨, СЛЕДУЮЩЕЕ):**
 - **SW-1/SW-2** (`remove-service-worker`), **EVAL-1/EVAL-2** (`remove-eval-obfuscation`) — regex ломает
   синтаксис/пропускает формы; перевести на AST.
 - **PARSE-1/PARSE-2** (`ast/parse`) — acorn не берёт Annex B `<!--`; непарсимое → флаг в отчёт, не тихий null.
@@ -138,8 +136,8 @@ by-design — решение владельца №7).
 ## Как начать новую сессию
 
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры). При сомнении — `git log --oneline`.
-2. **Весь Critical + High + C6 + SVG + offer закрыты.** Возьми верхнюю незакрытую из «Что осталось» —
-   рекомендую начать с **2D-2** (логичное продолжение 2D-3), затем кластер **C7** (regex→AST в JS).
+2. **Весь Critical + High + C6 + SVG + offer + 2D-2 закрыты.** Возьми верхнюю незакрытую из «Что осталось» —
+   рекомендую начать с кластера **C7** (regex→AST в JS-проходах: SW/EVAL/PARSE/CJS).
 3. TDD → фикс → зелёные тесты + чистый `tsc` → обнови `_index.md` + per-file док + счётчик тестов здесь →
    коммит на `redteam-fixes`.
 4. После пачки фиксов — `npm run clean -- <copy>` и `npm run verify -- <copy>` на копии реального лендинга
