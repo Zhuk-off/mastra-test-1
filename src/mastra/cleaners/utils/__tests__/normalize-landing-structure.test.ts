@@ -1063,3 +1063,43 @@ describe('NORM-3 — расширенный сбор ссылок', () => {
     expect(await exists(join(tmp, 'images', 'real.png'))).toBe(true);
   });
 });
+
+describe('NORM-6 — выбор главного файла: расширения + детерминизм', () => {
+  it('.xhtml распознаётся как главный → index.html', async () => {
+    await setup(tmp, {
+      'page.xhtml': '<!DOCTYPE html><html><head><title>Hi</title></head><body><h1>x</h1></body></html>',
+      'style.css': 'body{}',
+    });
+    const stats = await normalizeLandingStructure(tmp);
+    expect(await exists(join(tmp, 'index.html'))).toBe(true);
+    expect(stats.mainFileFound).toBe('page.xhtml');
+  });
+
+  it('.phtml распознаётся как главный → index.html', async () => {
+    await setup(tmp, {
+      'landing.phtml': '<!DOCTYPE html><html><head><title>L</title></head><body><h1>x</h1></body></html>',
+    });
+    const stats = await normalizeLandingStructure(tmp);
+    expect(await exists(join(tmp, 'index.html'))).toBe(true);
+    expect(stats.mainFileFound).toBe('landing.phtml');
+  });
+
+  it('тай-брейк детерминирован: при равных очках — путь по алфавиту', async () => {
+    const html = '<!DOCTYPE html><html><head><title>T</title></head><body><h1>x</h1></body></html>';
+    await setup(tmp, { 'bbb.html': html, 'aaa.html': html });
+    const stats = await normalizeLandingStructure(tmp);
+    expect(stats.mainFileFound).toBe('aaa.html'); // не bbb.html — детерминированно
+    expect(await exists(join(tmp, 'index.html'))).toBe(true);
+    expect(await exists(join(tmp, 'bbb.html'))).toBe(true); // второй кандидат остаётся на месте
+  });
+
+  it('НЕ-регресс: index.html выигрывает у прочих .html по очкам', async () => {
+    const other = '<!DOCTYPE html><html><head><title>Other</title></head><body><h1>y</h1><form></form></body></html>';
+    await setup(tmp, {
+      'aaa.html': other, // алфавитно раньше, но не index
+      'index.html': '<!DOCTYPE html><html><head><title>Main</title></head><body>main</body></html>',
+    });
+    const stats = await normalizeLandingStructure(tmp);
+    expect(stats.mainFileFound).toBe('index.html');
+  });
+});

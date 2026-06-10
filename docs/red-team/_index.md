@@ -99,7 +99,7 @@
 | NORM-3 | normalize-…ts | 🟧 | Robustness | Неполный сбор ссылок (lazy-load/poster/@import) + переезд → битые ссылки | ✅ |
 | NORM-4 | normalize-…ts | 🟨 | Robustness | Замена ссылок контекстно-слепа (бьёт inline-JS/meta) | 🆕 |
 | NORM-5 | normalize-…ts | 🟨 | Robustness | `stripPhpCode` рвёт разметку (`href="<?…?>"` → `href=""`) | 🆕 |
-| NORM-6 | normalize-…ts | 🟨 | Robustness | Выбор главного файла узкий (.html/.htm/.php) и недетерминирован | 🆕 |
+| NORM-6 | normalize-…ts | 🟨 | Robustness | Выбор главного файла узкий (.html/.htm/.php) и недетерминирован | ✅ |
 | NORM-7 | normalize-…ts | 🟩 | Low | Пробел в URL; UTF-16 мисскоринг; `@import "x"` без url() | 🆕 |
 | CDN-1 | cdn-detector.ts | 🟧 | Bypass | Генерик-репин отмывает чужой хост (`/npm`,`/gh`) в trusted jsdelivr | ✅ |
 | CDN-2 | cdn-detector.ts | 🟨 | Soundness | «Репин+SRI» = ложное чувство защиты (SRI ≠ происхождение) | 🆕 |

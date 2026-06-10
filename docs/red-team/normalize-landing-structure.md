@@ -95,7 +95,7 @@
   целиком было PHP), либо — снова — модель «плейсхолдер вместо удаления».
 - **Уверенность:** подтверждено чтением кода.
 
-### [NORM-6] 🟡 Robustness · 🟨 Medium · выбор главного файла: узкий и недетерминированный
+### [NORM-6] 🟡 Robustness · 🟨 Medium · выбор главного файла: узкий и недетерминированный (✅ закрыта)
 
 - **Сейчас:** `findMainFile` рассматривает только `.html/.htm/.php`
   ([:96](src/mastra/cleaners/utils/normalize-landing-structure.ts:96)); при отсутствии кандидата —
@@ -158,5 +158,11 @@ generic-отсечение URI-схем; чтение головы файла п
   существующей логикой (`data-srcset` ловит srcset-переписыватель через `\bsrcset`; прочие — правилом
   `[=(]['"]`). `#`-фрагмент `<use>` сохраняется. Гард `existingPathInsideSite` (NORM-1) отсекает
   не-файловые значения (`data-src='{json}'`) без падений. Тесты: +6 в `normalize-landing-structure.test.ts`.
-- **NORM-2 / NORM-4 … NORM-7** — НЕ трогали (отдельные находки), остаются 🆕. NORM-2 связан с
-  C2-followup (protect-and-restore серверных блоков); bare `@import` в самих CSS-файлах — NORM-7.
+- **NORM-6 ✅** — `findMainFile` расширен: кандидаты теперь `MAIN_FILE_EXTS` (+`.xhtml`/`.shtml`/`.phtml`/
+  `.php5`/`.php7`/`.phps`, консистентно с PHP-1; `isPhp` по `MAIN_PHP_EXTS`), index-бонус не зависит от
+  расширения (`index.*`). Тай-брейк при равных очках — детерминированный по пути (`a.path < b.path`),
+  а не порядок обхода ФС. ASP/JSP не добавлены (не стек владельца; при нужде — туда же, `<%…%>` срежет
+  pipeline после переименования в index.html). `.inc` — не кандидат (include/partial). Тесты:
+  `normalize-landing-structure.test.ts` (+4: `.xhtml`/`.phtml` → index.html, детерминизм, index-приоритет).
+- **NORM-2 / NORM-4 / NORM-5 / NORM-7** — НЕ трогали (отдельные находки), остаются 🆕. NORM-2 связан с
+  C2-followup (но `stripServerTags`+PHP-1 уже покрывают серверные теги); bare `@import` в CSS — NORM-7.

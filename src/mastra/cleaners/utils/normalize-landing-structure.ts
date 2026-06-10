@@ -86,6 +86,15 @@ const EXT_TO_DIR: Record<string, string> = {
   '.wasm': 'assets',
 };
 
+/**
+ * Расширения-кандидаты на главный файл (NORM-6). Кроме `.html/.htm/.php` — XHTML/SHTML и PHP-варианты
+ * (консистентно с PHP-1). ASP/JSP намеренно не включены (не стек владельца); при нужде добавляются
+ * сюда — после переименования в index.html их `<%…%>` всё равно срежет `stripServerTags` в pipeline.
+ * `.inc` НЕ кандидат (это include/partial, не главная страница).
+ */
+const MAIN_FILE_EXTS = new Set(['.html', '.htm', '.xhtml', '.shtml', '.php', '.phtml', '.php5', '.php7', '.phps']);
+const MAIN_PHP_EXTS = new Set(['.php', '.phtml', '.php5', '.php7', '.phps']);
+
 async function findMainFile(
   siteDir: string,
 ): Promise<{ path: string; isPhp: boolean } | null> {
@@ -93,19 +102,18 @@ async function findMainFile(
 
   for await (const file of walkFiles(siteDir)) {
     const ext = extname(file).toLowerCase();
-    if (ext !== '.html' && ext !== '.htm' && ext !== '.php') continue;
+    if (!MAIN_FILE_EXTS.has(ext)) continue; // NORM-6: + .xhtml/.shtml/.phtml/.php5/7/s
 
     const relPath = relative(siteDir, file);
     const depth = relPath.split(/[\\/]/).length - 1;
-    const isPhp = ext === '.php';
+    const isPhp = MAIN_PHP_EXTS.has(ext);
     const base = basename(file).toLowerCase();
-    const isIndexHtml = base === 'index.html' || base === 'index.htm';
-    const isIndexPhp = base === 'index.php';
+    const isIndex = base.replace(/\.[^.]+$/, '') === 'index'; // index.* при любом расширении (NORM-6)
 
     let score = 0;
 
-    if (isIndexHtml) score += 1000;
-    else if (isIndexPhp) score += 900;
+    // index.* приоритетнее; html-варианты чуть выше php-вариантов (бонус больше не зависит от ext).
+    if (isIndex) score += isPhp ? 900 : 1000;
 
     score -= depth * 50;
 
@@ -127,7 +135,8 @@ async function findMainFile(
   }
 
   if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.score - a.score);
+  // NORM-6: при равных очках — детерминированный тай-брейк по пути (а не порядок обхода ФС).
+  candidates.sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return { path: candidates[0]!.path, isPhp: candidates[0]!.isPhp };
 }
 

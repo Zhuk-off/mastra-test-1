@@ -22,7 +22,7 @@ cmd.exe с UNC-путём ломается. Все команды — через
 ```
 wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <cmd>'
 ```
-- Тесты: `npx vitest run` (сейчас **460 зелёных + 1 skipped**).
+- Тесты: `npx vitest run` (сейчас **464 зелёных + 1 skipped**).
 - Типы: `npx tsc --noEmit -p tsconfig.json` (должен быть EXIT=0).
 - Очистка: `npm run clean -- <dir>` (AST-advanced включён по умолчанию; `--no-advanced` чтобы выключить).
 - Проверка: `npm run verify -- <dir>` (интерактивная — прокликивает).
@@ -122,9 +122,10 @@ PIPE-3 (per-file try/catch — один кривой файл не валит п
   detection-regex стала moot для удаления (режется весь `<?php…?>`-блок). Не-`.php` гейтятся по
   `hasServerTags` (не мангать не-HTML `.inc`).
 
-**Normalize/HTML (🟨):** NORM-4 (контекстно-слепая замена бьёт inline-JS/meta), NORM-5 (`stripPhpCode`
-рвёт разметку), NORM-6 (выбор главного файла узкий/недетерминирован), DOM-2/DOM-3/DOM-4, 2B-1
-(base-aware normalize; 2B-2 ✅ meta-refresh снят), 2A-5 (inline-трекеры — только вендор-сниппеты).
+**Normalize/HTML (🟨):** NORM-4 (контекстно-слепая замена бьёт inline-JS/meta — но cheerio в normalize
+запрещён §16, только regex), NORM-5 (`stripPhpCode` рвёт разметку — артефакт `href=""` принят owner #2),
+DOM-2/DOM-3/DOM-4, 2B-1 (base-aware normalize), 2A-5 (inline-трекеры — вендор-сниппеты). NORM-6 ✅
+(расширения главного файла + детерминированный тай-брейк).
 
 **Макросы (🟨):** MAC-2 (другие синтаксисы `[..]`/`%..%`/`{{..}}`), MAC-3 (template-скрипты/непарсимый inline).
 
@@ -145,8 +146,8 @@ by-design — решение владельца №7).
 1. Прочитай `docs/red-team/_index.md` (статусы) и `00-summary.md` (кластеры). При сомнении — `git log --oneline`.
 2. **Весь Critical + High + C6 + SVG + offer + 2D-2 + C7 + 2B-2 + PHP-1 + 2D-5 закрыты.** Возьми верхнюю
    незакрытую из «Что осталось». Кандидаты на следующий заход: соундность детекторов **OBF-1/MET-1**
-   (🛠, по AST — идентификаторы/«полезность»; удаления обратимы, поэтому срочность низкая), либо кластер
-   **Normalize/HTML** (NORM-4/5/6 — контекстно-слепая замена/выбор главного файла; 2B-1 base-aware).
+   (🛠, по AST — идентификаторы/«полезность»; удаления обратимы, поэтому срочность низкая), либо остаток
+   **Normalize/HTML** (NORM-4 контекстно-слепая замена — но regex-only §16; 2B-1 base-aware; DOM-2/3/4).
 3. TDD → фикс → зелёные тесты + чистый `tsc` → обнови `_index.md` + per-file док + счётчик тестов здесь →
    коммит на `redteam-fixes`.
 4. После пачки фиксов — `npm run clean -- <copy>` и `npm run verify -- <copy>` на копии реального лендинга
