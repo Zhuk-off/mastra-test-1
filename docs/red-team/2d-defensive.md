@@ -68,7 +68,7 @@
   иначе «последний рубеж» отсутствует именно там, где чистка пропущена.
 - **Уверенность:** подтверждено чтением кода + тестом.
 
-### [2D-5] 🟢 Граница/Robustness · 🟨 Medium · remove-inline-exfil: непарсимое пропускается, только advanced
+### [2D-5] 🟢 Граница/Robustness · 🟨 Medium · remove-inline-exfil: непарсимое пропускается, только advanced (✅ закрыта)
 
 - **Сейчас:** `if (!ast) return;` ([:22](src/mastra/cleaners/passes/html/remove-inline-exfil-pass.ts:22))
   — непарсимый inline-`<script>` не трогается; проход добавляется только в `--advanced` (по умолчанию
@@ -128,4 +128,12 @@
   Гейт по литералу (внешний URL/трекер-слово) сохранён как первая линия; AST-проверка аддитивна. Same-host
   навигация и обычные обработчики (`onsubmit="return validate()"`) остаются (`isExternalUrl` ≠ свой хост;
   непарсимое → не трогаем, ср. ANA-1). Тесты: `strip-event-attrs.test.ts` (+8 = 16).
-- **2D-5** — НЕ трогали (непарсимый inline-script — логировать, не молча пропускать); 🆕.
+- **2D-5 ✅** — непарсимый inline-`<script>` больше не пропускается молча. `removeInlineExfilPass`:
+  (а) сначала пропускает не-JS типы (`json`/`template`/`ld+json`) через `JS_TYPE_RE`; (б) если тело
+  не парсится И содержит индикаторы exfil/обфускации (`INLINE_SUSPICION_RE`: fetch/sendBeacon/WS/eval/
+  Function/atob/unescape/fromCharCode/document.write/new Image/`.src=`/location-редирект) — скрипт
+  КАРАНТИНИТСЯ целиком (`kind: inline-script-unparsed`, лог `INLINE_JS_NOT_ANALYZED`, элемент удалён,
+  оригинал сохранён). Непарсимый JS и в браузере не исполнится корректно → удаление не теряет рабочую
+  логику; benign непарсимое (макро-шаблоны `{{offer}}`, битая безобидная вёрстка) индикаторов не имеет
+  → не трогаем (без FP/шума). Действие, а не WARN (owner #3). Закрывает inline-сторону [PARSE-2](3b-ast-inline-exfil.md).
+  Тест: `__tests__/inline-exfil-dom.test.ts` (+4).
