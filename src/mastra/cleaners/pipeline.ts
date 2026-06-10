@@ -70,6 +70,16 @@ const BASE_DOM_PASSES: DomPass[] = [
   injectCsp,                 // CSP-страховка — последним проходом
 ];
 
+/**
+ * PHP-1: серверные страницы помимо `.php`. Их серверный код/бэкдоры тоже надо вырезать
+ * (owner decision #2: чужой серверный код не используется → вырезать первым делом), иначе
+ * `.phtml`/`.inc` уезжают в прод нетронутыми и даже не сканируются на бэкдоры. Обрабатываем
+ * как HTML-страницу (→ stripServerTags + полная очистка + backdoor-скан), НО (кроме `.php`)
+ * только если в файле реально есть серверные теги — иначе `.inc` может быть не-HTML фрагментом
+ * (CSS/JS-партиал), и cheerio-обёртка его испортит.
+ */
+const PHP_PAGE_EXTRA_EXT = new Set(['.phtml', '.php5', '.php7', '.phps', '.inc']);
+
 function getDomPasses(runAdvanced: boolean): DomPass[] {
   if (!runAdvanced) return BASE_DOM_PASSES;
   // Advanced: AST-хирургия inline exfil сразу после удаления inline-трекеров.
@@ -246,8 +256,12 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
     // PIPE-3: изолируем обработку каждого файла — один кривой файл (битый JS/HTML, гонка по ФС)
     // не должен ронять весь прогон очистки. Ошибка фиксируется в логе, идём дальше.
     try {
-    if (ext === '.html' || ext === '.htm' || ext === '.php') {
+    const isPhpPage = ext === '.php' || PHP_PAGE_EXTRA_EXT.has(ext); // PHP-1
+    if (ext === '.html' || ext === '.htm' || isPhpPage) {
       const before = await readFile(file, 'utf8');
+      // PHP-1: .phtml/.inc/... обрабатываем как страницу только при наличии серверных тегов —
+      // иначе не-HTML .inc (CSS/JS-партиал) испортится cheerio-обёрткой. .php/.html — как раньше.
+      if (PHP_PAGE_EXTRA_EXT.has(ext) && !hasServerTags(before)) continue;
       stats.bytesBefore += before.length;
 
       const cdnReplacements = await buildCdnReplacements(siteDir, file, before);
@@ -280,10 +294,10 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
         }
       }
 
-      if (ext === '.php') {
+      if (isPhpPage) {
         stats.phpFilesProcessed++;
         if (runAdvanced) {
-          // Stage 7: PHP backdoor scanning (WARN only, requires --advanced)
+          // Stage 7: PHP backdoor scanning (WARN only, requires --advanced). PHP-1: и для .phtml/.inc.
           const phpWarnings = detectPhpBackdoors(before, relPath);
           if (phpWarnings.length > 0) {
             changelog.push(...phpWarnings);

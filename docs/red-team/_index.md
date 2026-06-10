@@ -183,7 +183,7 @@
 | CSS-4 | css | 🟩 | Bypass | `url(//evil)`/`@import //` обход; косметика номера строки | 🆕 |
 | SVG-1 | clean-svg | 🟨 | Bypass | self-closing/`href`-only `<script>`, неквотированные `on*` мимо | ✅ |
 | SVG-2 | clean-svg | 🟨 | Bypass | plain `href` (SVG2), `javascript:`, `<style>` в SVG не покрыты | ✅ |
-| PHP-1 | detect-php-backdoors | 🟨 | Soundness | Обфусцированные бэкдоры мимо; `.phtml`/`.inc` не сканируются; WARN | 🆕 |
+| PHP-1 | detect-php-backdoors | 🟨 | Soundness | Обфусцированные бэкдоры мимо; `.phtml`/`.inc` не сканируются; WARN | ✅ |
 | SM-1 | remove-source-maps | 🟩 | Perf | Второй полный обход + двойной I/O | 🆕 |
 | REP-1 | report.ts | 🟨 | Workflow | Отчёт скрывает удаления + баг типа `PHP_BACKDOOR_WARN` | ✅ |
 | QUAR-1 | quarantine.ts | 🟨 | Robustness | `_quarantine/`/отчёт/лог внутри siteDir → уезжают в прод | 🆕 |
