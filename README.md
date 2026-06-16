@@ -1,30 +1,99 @@
-# learn-mastra-2
+# Чистильщик лендингов
 
-Welcome to your new [Mastra](https://mastra.ai/) project! We're excited to see what you'll build.
+AI-агент-«верстальщик» для арбитража трафика: **скачивает** чужой лендинг, **очищает**
+его от трекеров и кражи трафика, **проверяет**, что очищенная копия не звонит на чужие
+домены — и отдаёт готовый к заливу шаблон.
 
-## Getting Started
+Построен на [Mastra](https://mastra.ai/) (TypeScript). Очистка работает по принципу
+**белого списка + карантина** (всё неизвестное не удаляется молча, а изолируется для ревью).
 
-Start the development server:
+---
 
-```shell
-npm run dev
+## Как это работает
+
+Конвейер из 3 шагов:
+
+```
+скачать (download) → почистить (clean) → проверить (verify)
 ```
 
-Open [http://localhost:4111](http://localhost:4111) in your browser to access [Mastra Studio](https://mastra.ai/docs/studio/overview). It provides an interactive UI for building and testing your agents, along with a REST API that exposes your Mastra application as a local service. This lets you start building without worrying about integration right away.
+Запустить можно двумя путями — оба зовут одни и те же функции-ядро:
 
-You can start editing files inside the `src/mastra` directory. The development server will automatically reload whenever you make changes.
+- **CLI** — команды `npm run download/clean/verify` (папка `scripts/`)
+- **Агент** — `landing-agent` вызывает 3 инструмента (для Mastra Studio / чата)
 
-## Learn more
+Подробная карта проекта (что где лежит, за что отвечает каждый файл) — в
+**[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
-To learn more about Mastra, visit our [documentation](https://mastra.ai/docs/). Your bootstrapped project includes example code for [agents](https://mastra.ai/docs/agents/overview), [tools](https://mastra.ai/docs/agents/using-tools), [workflows](https://mastra.ai/docs/workflows/overview), [scorers](https://mastra.ai/docs/evals/overview), and [observability](https://mastra.ai/docs/observability/overview).
+---
 
-If you're new to AI agents, check out our [course](https://mastra.ai/learn) and [YouTube videos](https://youtube.com/@mastra-ai). You can also join our [Discord](https://discord.gg/BTYqqHKUrf) community to get help and share your projects.
+## Быстрый старт
 
-## Deploy to the Mastra platform
+**Требования:** WSL (Ubuntu-24.04), Node `>=22.13.0` через nvm.
 
-The [Mastra platform](https://projects.mastra.ai) provides two products for deploying and managing AI applications built with the Mastra framework:
+```bash
+npm install                       # зависимости (+ playwright chromium)
+cp .env.example .env              # вписать ключ модели
 
-- **Studio**: A hosted visual environment for testing agents, running workflows, and inspecting traces
-- **Server**: A production deployment target that runs your Mastra application as an API server
+npm run download -- <url>         # скачать лендинг в downloads/<host>/
+npm run clean    -- downloads/<host>   # очистить
+npm run verify   -- downloads/<host>   # проверить, что не звонит наружу
 
-Learn more in the [Mastra platform documentation](https://mastra.ai/docs/mastra-platform/overview).
+npm run dev                       # Mastra Studio (UI агента) на localhost:4111
+```
+
+Флаги очистки: `--no-backup`, `--no-advanced`, `--coverage`, `--coverage-threshold=<n>`.
+
+После очистки в папке появляются: `clean-report.md` (что сделано), `clean-site-changes.log`
+(детальный лог) и `_quarantine/` (изолированное подозрительное — на ручное ревью).
+
+<details>
+<summary>Запуск из Windows-терминала (PowerShell)</summary>
+
+```powershell
+Set-Location C:\; wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm; . "$NVM_DIR/nvm.sh"; cd /home/asus/projects/me-projects/mastra/learn-mastra-2 && <команда>'
+```
+</details>
+
+---
+
+## Структура проекта
+
+| Папка | За что отвечает |
+| --- | --- |
+| `scripts/` | CLI: запуск конвейера руками |
+| `src/mastra/` | весь код: агент, инструменты, ядро очистки |
+| `src/mastra/cleaners/` | ❤️ ядро очистки (проходы, правила, утилиты, verify) |
+| `docs/` | спеки очистки + аудит безопасности (red-team) |
+| `downloads/` | рабочие данные: сюда качаются и тут чистятся лендинги |
+
+Полная карта с разбором каждого файла — в [ARCHITECTURE.md](ARCHITECTURE.md).
+
+---
+
+## Документация
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — карта проекта: что где и за что отвечает
+- [docs/cleaning-logic.md](docs/cleaning-logic.md) — логика очистки
+- [docs/js-cleaning-spec.md](docs/js-cleaning-spec.md) — спека очистки JS
+- [docs/red-team/](docs/red-team/) — аудит безопасности (источник правды: `_index.md`)
+
+---
+
+## Статус
+
+- ✅ **Готово:** скачивание, нормализация структуры, очистка, базовая верификация. Тесты зелёные, типы чистые.
+- 🟠 **Частично:** verify без мобайла; visual-diff не подключён; нет сквозного запуска одной командой.
+- 🔴 **Не начато:** Этап 2 «адаптация» (подстановка картинки/названия оффера по вертикали) и «локализация».
+
+---
+
+## Разработка
+
+```bash
+npx vitest run        # тесты
+npx tsc --noEmit      # проверка типов
+```
+
+При добавлении нового агента/инструмента/воркфлоу — регистрируй его в `src/mastra/index.ts`.
+Новые правила очистки добавляются **только** через новые проходы в `src/mastra/cleaners/passes/`.
