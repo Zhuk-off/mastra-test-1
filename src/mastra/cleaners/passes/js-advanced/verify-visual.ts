@@ -10,12 +10,19 @@ export interface VisualDiffResult {
   diffImagePath: string;
 }
 
-export async function takeScreenshot(pageUrl: string, outputPath: string): Promise<void> {
+export async function takeScreenshot(
+  pageUrl: string,
+  outputPath: string,
+  viewport: { width: number; height: number } = { width: 1280, height: 800 },
+): Promise<void> {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto(pageUrl, { waitUntil: 'networkidle' });
+    await page.setViewportSize(viewport);
+    // 'load' + timeout + catch: оригинал (до очистки) часто звонит трекерам, и networkidle
+    // мог бы не наступить никогда. fullPage:false + фикс. вьюпорт → стабильные размеры для diff.
+    await page.goto(pageUrl, { waitUntil: 'load', timeout: 30_000 }).catch(() => undefined);
+    await page.waitForTimeout(500).catch(() => undefined);
     await page.screenshot({ path: outputPath, fullPage: false });
   } finally {
     await browser.close();

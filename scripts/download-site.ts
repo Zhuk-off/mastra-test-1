@@ -46,6 +46,8 @@ interface Phase1Result {
   seenUrls: Set<string>;
   mainHost: string;
   finalUrl: string;
+  /** Сохранён ли хотя бы один HTML-документ (иначе скачивание = провал). */
+  htmlSaved: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -231,6 +233,7 @@ async function phase1Browser(options: DownloadOptions): Promise<Phase1Result> {
   }
 
   let finalUrl = url;
+  let htmlSaved = false;
   console.log('[phase1] Сохранение финального HTML (после JS-рендера)...');
   try {
     const finalHtml = await page.content();
@@ -240,6 +243,7 @@ async function phase1Browser(options: DownloadOptions): Promise<Phase1Result> {
     await mkdir(dirname(htmlAbsPath), { recursive: true });
     await writeFile(htmlAbsPath, finalHtml, 'utf8');
     fileToUrl.set(htmlRelPath, finalUrl);
+    htmlSaved = true;
     console.log(`[phase1] HTML записан: ${htmlRelPath}`);
   } catch (err) {
     console.warn(`[phase1] Не удалось сохранить финальный HTML: ${(err as Error).message}`);
@@ -249,7 +253,9 @@ async function phase1Browser(options: DownloadOptions): Promise<Phase1Result> {
   await context.close();
   await browser.close();
 
-  return { stats, fileToUrl, seenUrls, mainHost, finalUrl };
+  // Фолбэк: если финальный content() не записался, но HTML-ответ был сохранён обработчиком response.
+  const anyHtmlFile = [...fileToUrl.keys()].some((p) => /\.html?$/i.test(p));
+  return { stats, fileToUrl, seenUrls, mainHost, finalUrl, htmlSaved: htmlSaved || anyHtmlFile };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1093,6 +1099,8 @@ export interface DownloadResult {
   phase2: { saved: number; failed: number };
   phase3: { rewrittenFiles: number };
   phase4: Phase4Result;
+  /** false, если не сохранён ни один HTML-документ (страница не загрузилась). */
+  htmlSaved: boolean;
 }
 
 export async function downloadSite(url: string, outputDir?: string): Promise<DownloadResult> {
@@ -1103,6 +1111,13 @@ export async function downloadSite(url: string, outputDir?: string): Promise<Dow
   const resolvedOutputDir = outputDir ?? `./downloads/${new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_')}`;
 
   const result = await phase1Browser({ url, outputDir: resolvedOutputDir });
+  // #2: если HTML-страница не сохранилась — дальше чистить нечего. Не возвращаем «успех» с пустым
+  // результатом (иначе агент пойдёт чистить несуществующий лендинг) — явно падаем.
+  if (!result.htmlSaved) {
+    throw new Error(
+      `Скачивание не удалось: HTML-страница не сохранена (страница не загрузилась или недоступна). URL: ${url}`,
+    );
+  }
   const phase2 = await phase2DownloadMissing(result, resolvedOutputDir);
   const phase3 = await phase3RewriteUrls(result, resolvedOutputDir);
   const phase4 = await phase4IntegrityCheck(result, resolvedOutputDir);
@@ -1113,6 +1128,7 @@ export async function downloadSite(url: string, outputDir?: string): Promise<Dow
     phase2,
     phase3,
     phase4,
+    htmlSaved: result.htmlSaved,
   };
 }
 
@@ -1144,6 +1160,10 @@ async function main(): Promise<void> {
 
   // Phase 1
   const result = await phase1Browser({ url, outputDir });
+  if (!result.htmlSaved) {
+    console.error('[download-site] ОШИБКА: HTML-страница не сохранена — страница не загрузилась/недоступна.');
+    process.exit(1);
+  }
 
   // Phase 2
   const phase2 = await phase2DownloadMissing(result, outputDir);

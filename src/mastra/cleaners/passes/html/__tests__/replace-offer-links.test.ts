@@ -74,4 +74,16 @@ describe('replaceOfferLinks — агрессивная политика «всё
     const { counts } = run(`<a href="/a">1</a><a href="https://x.com">2</a><a href="#s">3</a><a href="tel:+1">4</a>`);
     expect(counts.offerLinksReplaced).toBe(2); // /a и x.com; #s и tel: — нет
   });
+
+  // ── СМЕШАННЫЙ href (url + макрос) — фикс P1: трекер не должен выживать ──
+  it('СМЕШАННЫЙ href (url + чужой макрос) → {offer} (трекер не выживает)', () => {
+    const { out, ctx } = run(`<a href="https://evil.tracker/click?id={subid}">go</a>`);
+    expect(out).toContain('href="{offer}"');
+    expect(out).not.toContain('evil.tracker');
+    expect(ctx.macros!.some((m) => m.kind === 'link' && m.token.includes('evil.tracker'))).toBe(true);
+  });
+
+  it('href целиком из макроса ({subid}) — НЕ трогаем здесь (разберёт detect-macros)', () => {
+    expect(run(`<a href="{subid}">x</a>`).out).toContain('href="{subid}"');
+  });
 });

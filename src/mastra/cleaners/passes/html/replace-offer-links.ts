@@ -8,7 +8,8 @@ const KEEP_SCHEMES = new Set(['mailto', 'tel']);
  * на оффер. Любой `<a>`/`<area>` href → `{offer}`, КРОМЕ:
  *  - якорей `#...` (прокрутка к форме/квизу на одностраничнике — это не навигация);
  *  - `mailto:`/`tel:` (контакт, не увод трафика);
- *  - href с макросом `{...}` — их разбирает `detect-macros` (наш макрос оставит, чужой pure-macro → {offer});
+ *  - href, который ЦЕЛИКОМ один макрос (`{...}`) — его разбирает `detect-macros` (наш оставит, чужой pure-macro → {offer});
+ *    СМЕШАННЫЙ href (реальный URL + макрос, напр. `https://evil/?id={sub}`) — НЕ исключение: переписываем в {offer} здесь;
  *  - пустых. Опасные схемы (`javascript:`/`data:`) уже сняты `stripDangerousHrefs` (2D-6) до этого прохода.
  *
  * Почему агрессивно: чужие футер-ссылки (privacy/соцсети/партнёрские) чаще всего = спрятанное
@@ -20,7 +21,11 @@ export const replaceOfferLinks: DomPass = ($, ctx) => {
   let offerLinksReplaced = 0;
   $('a[href], area[href]').each((_, el) => {
     const href = ($(el).attr('href') ?? '').trim();
-    if (!href || href.startsWith('#') || href.includes('{')) return;
+    // Исключаем только href, который ЦЕЛИКОМ один макрос ({offer}/{_offer_value:...}/{sub}) —
+    // его разбирает detect-macros. СМЕШАННЫЙ href (реальный URL + макрос) переписываем в {offer},
+    // иначе чужой трекер-URL выживет в чистом лендинге.
+    const isPureMacro = /^\s*\{[^}]+\}\s*$/.test(href);
+    if (!href || href.startsWith('#') || isPureMacro) return;
     const scheme = (/^([a-z][a-z0-9+.\-]*):/i.exec(href)?.[1] ?? '').toLowerCase();
     if (KEEP_SCHEMES.has(scheme)) return;
 
