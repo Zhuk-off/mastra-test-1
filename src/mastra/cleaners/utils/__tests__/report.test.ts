@@ -80,4 +80,15 @@ describe('renderReport', () => {
     expect(md).toContain('js/unused.js');
     expect(md).toContain('_backup');
   });
+
+  it('список предупреждений обрезается на 100 с пометкой «…и ещё N» (REP-2)', () => {
+    const log: ChangelogEntry[] = Array.from({ length: 130 }, (_, i) => ({
+      file: `f${i}.js`,
+      type: 'JS предупреждение',
+      description: `warn ${i}`,
+    }));
+    const md = renderReport(baseStats({ detectorWarnings: 130 }), log, []);
+    expect(md).toContain('130 шт.');
+    expect(md).toContain('…и ещё 30');
+  });
 });

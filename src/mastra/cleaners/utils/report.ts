@@ -129,6 +129,9 @@ export function renderReport(
     for (const w of warnings.slice(0, 100)) {
       L.push(`- **${w.type}** \`${w.file}\`${w.lineNumber ? `:${w.lineNumber}` : ''} — ${w.description}`);
     }
+    if (warnings.length > 100) {
+      L.push(`- _…и ещё ${warnings.length - 100} предупреждений (полный список — в clean-site-changes.log)_`);
+    }
     L.push('');
   }
 

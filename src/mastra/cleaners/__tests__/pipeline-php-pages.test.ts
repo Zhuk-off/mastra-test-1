@@ -65,4 +65,13 @@ describe('PHP-1 — серверные страницы помимо .php (phtml
     const out = await readFile(join(tmp, 'styles.inc'), 'utf8');
     expect(out).toBe(partial); // нетронут — не обёрнут cheerio
   });
+
+  it('#1: бэкдор в .php флажится и в ОБЫЧНОМ (не advanced) прогоне', async () => {
+    await writeFile(join(tmp, 'index.html'), MAIN, 'utf8');
+    await writeFile(join(tmp, 'shell.php'), PHTML_SHELL, 'utf8');
+
+    const stats = await cleanSite(tmp); // без runAdvanced — скан теперь работает всегда
+
+    expect(stats.phpBackdoorWarning).toBe(true);
+  });
 });

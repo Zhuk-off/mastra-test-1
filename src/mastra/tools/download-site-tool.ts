@@ -33,6 +33,11 @@ export const downloadSiteTool = createTool({
       .string()
       .url()
       .describe('Full URL of the landing page to download (must start with http:// or https://)'),
+    sameDomainOnly: z
+      .boolean()
+      .optional()
+      .describe('Качать только ассеты основного домена (не тянуть чужие CDN)'),
+    timeout: z.number().optional().describe('Таймаут навигации, мс (по умолчанию 60000)'),
   }),
   outputSchema: z.object({
     outputDir: z.string(),
@@ -61,18 +66,27 @@ export const downloadSiteTool = createTool({
     }),
     totalSaved: z.number(),
   }),
-  execute: async ({ url }) => {
-    const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
-    const outputDir = join(DOWNLOADS_BASE, hostname);
-    const result = await downloadSite(url, outputDir);
-
-    return {
-      outputDir: result.outputDir,
-      phase1: result.phase1,
-      phase2: result.phase2,
-      phase3: result.phase3,
-      phase4: result.phase4,
-      totalSaved: result.phase1.saved + result.phase2.saved,
-    };
+  execute: async ({ url, sameDomainOnly, timeout }) => {
+    let outputDir: string;
+    try {
+      const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
+      outputDir = join(DOWNLOADS_BASE, hostname);
+    } catch {
+      throw new Error(`Некорректный URL: ${url}`);
+    }
+    try {
+      const result = await downloadSite(url, outputDir, { sameDomainOnly, timeout });
+      return {
+        outputDir: result.outputDir,
+        phase1: result.phase1,
+        phase2: result.phase2,
+        phase3: result.phase3,
+        phase4: result.phase4,
+        totalSaved: result.totalSaved,
+      };
+    } catch (e) {
+      // #2: сырой crash тула → осмысленная ошибка, чтобы агент сообщил «скачивание упало».
+      throw new Error(`Скачивание не удалось: ${(e as Error).message}`);
+    }
   },
 });

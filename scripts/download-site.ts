@@ -19,6 +19,7 @@
 
 import { chromium, type Response } from 'playwright';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { statSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve, posix } from 'node:path';
 import { URL, fileURLToPath } from 'node:url';
 
@@ -30,6 +31,18 @@ interface DownloadOptions {
   viewport?: { width: number; height: number };
   sameDomainOnly?: boolean;
   timeout?: number;
+}
+
+/** Публичные опции downloadSite() — прокидываются в фазы 1 и 2 (раньше были захардкожены). */
+export interface DownloadSiteOptions {
+  /** Качать только ассеты основного домена (не тянуть чужие CDN). */
+  sameDomainOnly?: boolean;
+  headless?: boolean;
+  userAgent?: string;
+  viewport?: { width: number; height: number };
+  timeout?: number;
+  maxIterations?: number;
+  concurrency?: number;
 }
 
 export interface DownloadStats {
@@ -1081,7 +1094,6 @@ function fixOneUrl(
 
 function fileExistsSync(p: string): boolean {
   try {
-    const { statSync } = require('node:fs') as typeof import('node:fs');
     statSync(p);
     return true;
   } catch {
@@ -1099,18 +1111,32 @@ export interface DownloadResult {
   phase2: { saved: number; failed: number };
   phase3: { rewrittenFiles: number };
   phase4: Phase4Result;
+  /** Сохранено файлов всего (phase1 + phase2). */
+  totalSaved: number;
   /** false, если не сохранён ни один HTML-документ (страница не загрузилась). */
   htmlSaved: boolean;
 }
 
-export async function downloadSite(url: string, outputDir?: string): Promise<DownloadResult> {
+export async function downloadSite(
+  url: string,
+  outputDir?: string,
+  opts: DownloadSiteOptions = {},
+): Promise<DownloadResult> {
   if (!/^https?:\/\//i.test(url)) {
     throw new Error(`URL must start with http:// or https://: ${url}`);
   }
 
   const resolvedOutputDir = outputDir ?? `./downloads/${new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_')}`;
 
-  const result = await phase1Browser({ url, outputDir: resolvedOutputDir });
+  const result = await phase1Browser({
+    url,
+    outputDir: resolvedOutputDir,
+    headless: opts.headless,
+    userAgent: opts.userAgent,
+    viewport: opts.viewport,
+    sameDomainOnly: opts.sameDomainOnly,
+    timeout: opts.timeout,
+  });
   // #2: если HTML-страница не сохранилась — дальше чистить нечего. Не возвращаем «успех» с пустым
   // результатом (иначе агент пойдёт чистить несуществующий лендинг) — явно падаем.
   if (!result.htmlSaved) {
@@ -1118,7 +1144,11 @@ export async function downloadSite(url: string, outputDir?: string): Promise<Dow
       `Скачивание не удалось: HTML-страница не сохранена (страница не загрузилась или недоступна). URL: ${url}`,
     );
   }
-  const phase2 = await phase2DownloadMissing(result, resolvedOutputDir);
+  const phase2 = await phase2DownloadMissing(result, resolvedOutputDir, {
+    sameDomainOnly: opts.sameDomainOnly,
+    maxIterations: opts.maxIterations,
+    concurrency: opts.concurrency,
+  });
   const phase3 = await phase3RewriteUrls(result, resolvedOutputDir);
   const phase4 = await phase4IntegrityCheck(result, resolvedOutputDir);
 
@@ -1128,6 +1158,7 @@ export async function downloadSite(url: string, outputDir?: string): Promise<Dow
     phase2,
     phase3,
     phase4,
+    totalSaved: result.stats.saved + phase2.saved,
     htmlSaved: result.htmlSaved,
   };
 }

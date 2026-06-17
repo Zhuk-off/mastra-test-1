@@ -1112,7 +1112,8 @@ if (options?.runCoverage) {
       type: 'DEAD_JS_FILE',
       description: file.reason,
     });
-    // TODO: этап 5b — также удалить <script src="..."> из HTML
+    // этап 5b — РЕАЛИЗОВАНО: ссылки на удалённые файлы (<script src>/<link>/<img>) снимает
+    // stripRefsToDeletedFiles одним DOM-проходом в pipeline.ts (metric/obfuscated/unversioned/dead).
   }
 }
 ```

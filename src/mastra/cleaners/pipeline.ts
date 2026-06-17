@@ -296,14 +296,13 @@ export async function cleanSite(siteDir: string, options?: CleanSiteOptions): Pr
 
       if (isPhpPage) {
         stats.phpFilesProcessed++;
-        if (runAdvanced) {
-          // Stage 7: PHP backdoor scanning (WARN only, requires --advanced). PHP-1: и для .phtml/.inc.
-          const phpWarnings = detectPhpBackdoors(before, relPath);
-          if (phpWarnings.length > 0) {
-            changelog.push(...phpWarnings);
-            stats.phpBackdoorWarning = true;
-            stats.detectorWarnings += phpWarnings.length;
-          }
+        // PHP backdoor scanning (WARN only). Сканируем ВСЕГДА (regex дёшев): даже в обычном
+        // прогоне владелец должен видеть сигнал «тут был бэкдор». PHP-1: и для .phtml/.inc.
+        const phpWarnings = detectPhpBackdoors(before, relPath);
+        if (phpWarnings.length > 0) {
+          changelog.push(...phpWarnings);
+          stats.phpBackdoorWarning = true;
+          stats.detectorWarnings += phpWarnings.length;
         }
       } else {
         stats.htmlFilesProcessed++;
