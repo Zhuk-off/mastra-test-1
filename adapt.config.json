@@ -1,0 +1,13 @@
+{
+  "$comment": "Настройки этапа 5 (адаптация под оффер). Правит владелец. Бриф в чате переопределяет на задачу. imageBase — полный cloudfront-URL С макросом на конце (на трекере раскроется в имя_товара.webp).",
+  "defaultVertical": "Adult",
+  "verticals": {
+    "Adult": {
+      "imageBase": "https://d4tncaiqdi48w.cloudfront.net/Aquarium/Images/Adult/ProductImages/{_offer_value:offerimage}"
+    },
+    "WeightLoss": {
+      "imageBase": "https://d4tncaiqdi48w.cloudfront.net/Aquarium/Images/WeightLoss/ProductImages/{_offer_value:offerimage}"
+    }
+  },
+  "nameMacro": "{_offer_value:offername}"
+}

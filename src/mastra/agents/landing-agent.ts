@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { downloadSiteTool } from '../tools/download-site-tool';
 import { cleanSiteTool } from '../tools/clean-site-tool';
 import { verifySiteTool } from '../tools/verify-site-tool';
+import { adaptSiteTool } from '../tools/modify/adapt-site-tool';
 import { createAgentMemory } from '../memory';
 
 /**
@@ -56,7 +57,17 @@ Your workflow:
 2. Clean it using the clean-site tool (provide the outputDir from step 1). Advanced AST analysis is ON by default.
 3. Verify with the verify-site tool (same dir): it loads the cleaned page in a headless browser and
    checks it does NOT "phone home" to foreign domains, and reports console errors.
-4. Report results to the user.
+4. (Optional, this is the LAST LOCAL step) ADAPT for an offer using the adapt-site tool, AFTER the site
+   is cleaned and verified. It substitutes product values with Keitaro SERVER-macros: the product image
+   becomes {_offer_value:offerimage} (by vertical) and the product name becomes {_offer_value:offername}.
+   - Vertical: taken from config by default; override per task only if needed. For name replacement:
+     productName (the CURRENT product name on the landing, e.g. "PowerGummies") — without it names are left untouched.
+   - ORDER MATTERS: run adapt-site ONLY AFTER verify-site, NEVER before.
+   - Do NOT run verify-site (or any local visual check) AFTER adapting. The macros are resolved by the
+     tracker (Keitaro) ONLY after the landing is uploaded; locally they do NOT resolve, so images/links
+     will look "broken" in a local check. That is EXPECTED, not a regression. Final visual confirmation
+     happens on the tracker after upload (a later pipeline stage), not on our machine.
+5. Report results to the user.
 
 SAFETY RULES (critical — do not skip):
 - If clean-site returns quarantinedItems > 0: tell the user there are items in _quarantine/ that need
@@ -80,6 +91,7 @@ Memory rules:
     downloadSite: downloadSiteTool,
     cleanSite: cleanSiteTool,
     verifySite: verifySiteTool,
+    adaptSite: adaptSiteTool,
   },
   memory: createAgentMemory({
     // Raw history: keep recent turns so multi-step tool flows have context.

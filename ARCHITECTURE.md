@@ -65,13 +65,14 @@ learn-mastra-2/
 | Файл / папка | За что отвечает |
 | --- | --- |
 | [index.ts](src/mastra/index.ts) | главная сборка Mastra: регистрирует агентов, хранилище (LibSQL + DuckDB), логи, observability |
-| [agents/landing-agent.ts](src/mastra/agents/landing-agent.ts) | **наш боевой агент**: инструкции, 3 инструмента, рабочая память |
+| [agents/landing-agent.ts](src/mastra/agents/landing-agent.ts) | **наш боевой агент**: инструкции, 4 инструмента (download/clean/verify/adapt), рабочая память |
 | [tools/download-site-tool.ts](src/mastra/tools/download-site-tool.ts) | обёртка-инструмент над `downloadSite()` |
 | [tools/clean-site-tool.ts](src/mastra/tools/clean-site-tool.ts) | обёртка над `cleanSite()` (+ бэкап перед очисткой) |
 | [tools/verify-site-tool.ts](src/mastra/tools/verify-site-tool.ts) | обёртка над `verifySiteRuntime()` |
 | [lib/http.ts](src/mastra/lib/http.ts) | общий HTTP-клиент (фетч страниц и файлов с CDN) |
 | [memory/index.ts](src/mastra/memory/index.ts) | конфиг памяти агента |
-| `tools/keitaro/`, `tools/modify/`, `tools/yougile/` | **пустые папки-заготовки** под будущие интеграции (JSON-доки API лежат в `docs/`) |
+| [tools/modify/adapt-site-tool.ts](src/mastra/tools/modify/adapt-site-tool.ts) | обёртка над `adaptSite()` — адаптация под оффер (этап 5: картинка/имя → макросы) |
+| `tools/keitaro/`, `tools/yougile/` | **пустые папки-заготовки** под будущие интеграции (JSON-доки API лежат в `docs/`) |
 
 > **Остатки стартового шаблона Mastra** (к продукту отношения не имеют, кандидаты на удаление):
 > `agents/weather-agent.ts`, `agents/my-agent.ts`, `workflows/weather-workflow.ts`,
@@ -168,6 +169,27 @@ learn-mastra-2/
 | --- | --- |
 | [verify-runtime.ts](src/mastra/cleaners/verify/verify-runtime.ts) | `verifySite()` — прогон очищенного сайта в headless Chromium на **десктопе и мобайле**, по **всем HTML-страницам**; ловит запросы на чужие хосты, прокликивает интерактив, считает визуальный diff с оригиналом |
 
+### 5.6. `adapt/` — адаптация под оффер (этап 5, сестра `cleaners/`)
+
+Берёт УЖЕ очищенный лендинг и подставляет продуктовые значения под оффер. Переиспользует
+`cleaners/utils/html-dom.ts` (cheerio) и `cleaners/registry/policy.ts` (макросы/вертикали).
+Запускать ПОСЛЕ clean+verify, затем verify ещё раз.
+
+| Файл | За что отвечает |
+| --- | --- |
+| [adapt/adapt-site.ts](src/mastra/adapt/adapt-site.ts) | `adaptSite(siteDir, brief)` — оркестратор: проходы по всем HTML, отчёт `adapt-report.md` |
+| [adapt/passes/replace-product-image.ts](src/mastra/adapt/passes/replace-product-image.ts) | картинка → макрос `{_offer_value:offerimage}` по вертикали (T1 чужой макрос в src; T2 `<img>` в `<a href="{offer}">`) |
+| [adapt/passes/replace-product-name.ts](src/mastra/adapt/passes/replace-product-name.ts) | все вхождения `productName` → `{_offer_value:offername}` (текст/alt/title/meta) |
+| [adapt/config.ts](src/mastra/adapt/config.ts) + [adapt.config.json](adapt.config.json) (корень) | настройки: дефолтная вертикаль, базы URL картинок по вертикали, макрос имени. Слои: встроенные дефолты ← файл ← бриф |
+| [adapt/targets.ts](src/mastra/adapt/targets.ts), [adapt/types.ts](src/mastra/adapt/types.ts) (`AdaptBrief`), [adapt/report.ts](src/mastra/adapt/report.ts) | резолверы цели (+re-point), контракт брифа, отчёт |
+
+**Порядок:** adapt — ПОСЛЕДНИЙ локальный шаг, ПОСЛЕ verify. **НЕ** запускать verify ПОСЛЕ adapt: макросы
+раскрывает только трекер при отдаче, локально картинки «битые» — это норма (финальный визуал-чек — на проде).
+Смена настроек и повторный прогон сами перенацеливают ранее вставленный URL (re-point, без лишних файлов).
+
+Статус: **v1 (картинка+имя) готов**. Перевод, инжект скриптов, эвристика картинки без offer-якоря — впереди.
+Спека/handoff: [docs/stage-5-adaptation.md](docs/stage-5-adaptation.md).
+
 ---
 
 ## 6. Что происходит за один прогон `cleanSite()`
@@ -262,7 +284,7 @@ Set-Location C:\; wsl.exe -d Ubuntu-24.04 -e bash -lc 'export NVM_DIR=$HOME/.nvm
 | 2б | …либо **забрать из трекера** Keitaro + выбор источника | 🔴 не начато | `tools/keitaro/` (пусто), `docs/keitaro-api-docs.json`; PLAN шаги 6–7 |
 | 3 | Очистка (если скачан) | ✅ готово | `cleaners/` |
 | 4 | Локальный запуск + проверка работы | ✅ готово | `verify/verify-runtime.ts` → `verifySite()`: десктоп + мобайл, все страницы, единый allowlist |
-| 5 | Задания из YouGile: перевод / замена картинок / наши базовые скрипты | 🔴 не начато | Этап «адаптация» (translate-text, replace-image, inject-script); PLAN шаги 9–11 |
+| 5 | Адаптация под оффер: замена картинки/имени — **✅ v1**; перевод / базовые скрипты — 🔴 позже | 🟡 частично | `src/mastra/adapt/` (`adaptSite`) + `tools/modify/adapt-site-tool.ts`; см. §5.6 и `docs/stage-5-adaptation.md` |
 | 6 | Проверка отображения (финальный visual check) | 🟠 встроено в verify | визуальный diff очистки с оригиналом (`_backup`) — информационно; PLAN шаг 12 |
 | 7 | Упаковка в zip + отправка в трекер | 🔴 не начато | PLAN шаги 13–14 (package-zip, upload Keitaro) |
 | 8 | Проверка на проде (как выглядит/работает в трекере) | 🔴 не начато | PLAN шаг 15 |
